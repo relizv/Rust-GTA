@@ -146,13 +146,14 @@ pub fn setup_game_assets(
             ..default()
         })
     };
-    let emissive = |mats: &mut Assets<StandardMaterial>, color: Color| -> Handle<StandardMaterial> {
-        mats.add(StandardMaterial {
-            base_color: Color::BLACK,
-            emissive: color.into(),
-            ..default()
-        })
-    };
+    let emissive =
+        |mats: &mut Assets<StandardMaterial>, color: Color| -> Handle<StandardMaterial> {
+            mats.add(StandardMaterial {
+                base_color: Color::BLACK,
+                emissive: color.into(),
+                ..default()
+            })
+        };
     let unlit = |mats: &mut Assets<StandardMaterial>, color: Color| -> Handle<StandardMaterial> {
         mats.add(StandardMaterial {
             base_color: color,
@@ -204,7 +205,10 @@ pub fn setup_game_assets(
         Color::srgb(1.0, 0.53, 0.0),
         Color::srgb(0.53, 0.27, 1.0),
     ];
-    let car_colors: Vec<_> = car_palette.iter().map(|c| lambert(&mut materials, *c)).collect();
+    let car_colors: Vec<_> = car_palette
+        .iter()
+        .map(|c| lambert(&mut materials, *c))
+        .collect();
 
     let building_palette: [Color; 8] = [
         Color::srgb(0.54, 0.54, 0.60),
@@ -216,7 +220,10 @@ pub fn setup_game_assets(
         Color::srgb(0.63, 0.35, 0.29),
         Color::srgb(0.29, 0.41, 0.54),
     ];
-    let building_colors: Vec<_> = building_palette.iter().map(|c| lambert(&mut materials, *c)).collect();
+    let building_colors: Vec<_> = building_palette
+        .iter()
+        .map(|c| lambert(&mut materials, *c))
+        .collect();
 
     commands.insert_resource(GameAssets {
         mesh_unit_box,
