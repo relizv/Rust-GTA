@@ -20,18 +20,15 @@ use bevy_egui::EguiPlugin;
 
 fn main() {
     App::new()
-        .add_plugins(
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        title: "Mini GTA — Rust Edition".into(),
-                        resolution: (1280.0, 720.0).into(),
-                        resizable: true,
-                        ..default()
-                    }),
-                    ..default()
-                }),
-        )
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Mini GTA — Rust Edition".into(),
+                resolution: (1280.0, 720.0).into(),
+                resizable: true,
+                ..default()
+            }),
+            ..default()
+        }))
         .add_plugins(EguiPlugin)
         // Resources
         .init_resource::<resources::GameState>()
@@ -40,8 +37,14 @@ fn main() {
         // Startup systems — order matters
         .add_systems(Startup, setup_world)
         .add_systems(Startup, resources::setup_game_assets.after(setup_world))
-        .add_systems(Startup, city::build_city.after(resources::setup_game_assets))
-        .add_systems(Startup, player::spawn_player.after(resources::setup_game_assets))
+        .add_systems(
+            Startup,
+            city::build_city.after(resources::setup_game_assets),
+        )
+        .add_systems(
+            Startup,
+            player::spawn_player.after(resources::setup_game_assets),
+        )
         .add_systems(Startup, car::spawn_cars.after(resources::setup_game_assets))
         .add_systems(
             Startup,
@@ -114,18 +117,16 @@ fn setup_world(mut commands: Commands) {
     }
     .build();
 
-    commands.spawn((
-        DirectionalLightBundle {
-            directional_light: DirectionalLight {
-                color: Color::srgb(1.0, 0.957, 0.878),
-                illuminance: 1.0,
-                shadows_enabled: true,
-                shadow_depth_bias: -0.0005,
-                ..default()
-            },
-            cascade_shadow_config: cascade_config,
-            transform: Transform::from_xyz(60.0, 100.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
+    commands.spawn((DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            color: Color::srgb(1.0, 0.957, 0.878),
+            illuminance: 1.0,
+            shadows_enabled: true,
+            shadow_depth_bias: -0.0005,
             ..default()
         },
-    ));
+        cascade_shadow_config: cascade_config,
+        transform: Transform::from_xyz(60.0, 100.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
+    },));
 }

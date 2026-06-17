@@ -4,7 +4,7 @@ use bevy::math::{Cuboid, Plane3d, Rectangle};
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::resources::{GameAssets, GRID, STEP, BLOCK, ROAD_W, SIDEWALK_W, CITY_HALF};
+use crate::resources::{GameAssets, BLOCK, CITY_HALF, GRID, ROAD_W, SIDEWALK_W, STEP};
 
 #[derive(Component)]
 pub struct Building {
@@ -174,7 +174,11 @@ fn spawn_building<R: Rng>(
         for c in 0..cols_x {
             let x = -w / 2.0 + (c as f32 + 0.5) * (w / cols_x as f32);
             let on = rng.gen_bool(0.35);
-            let mat = if on { assets.mat_window_on.clone() } else { assets.mat_window_off.clone() };
+            let mat = if on {
+                assets.mat_window_on.clone()
+            } else {
+                assets.mat_window_off.clone()
+            };
 
             commands.spawn(PbrBundle {
                 mesh: assets.mesh_window.clone(),
@@ -195,7 +199,11 @@ fn spawn_building<R: Rng>(
         for c in 0..cols_z {
             let z = -d / 2.0 + (c as f32 + 0.5) * (d / cols_z as f32);
             let on = rng.gen_bool(0.35);
-            let mat = if on { assets.mat_window_on.clone() } else { assets.mat_window_off.clone() };
+            let mat = if on {
+                assets.mat_window_on.clone()
+            } else {
+                assets.mat_window_off.clone()
+            };
 
             commands.spawn(PbrBundle {
                 mesh: assets.mesh_window.clone(),

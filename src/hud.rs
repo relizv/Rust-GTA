@@ -11,9 +11,9 @@ use bevy::prelude::*;
 use bevy::window::CursorGrabMode;
 use bevy_egui::{egui, EguiContexts};
 
-use crate::player::Player;
 use crate::car::Car;
 use crate::pedestrian::Pedestrian;
+use crate::player::Player;
 use crate::resources::{GameState, InputState, CITY_HALF, GRID, STEP};
 
 pub fn update_hud(
@@ -83,17 +83,42 @@ pub fn update_hud(
                 .show(ui, |ui| {
                     ui.set_min_width(180.0);
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Здоровье").color(egui::Color32::from_rgb(170, 170, 187)));
-                        ui.label(egui::RichText::new(format!("{}", game_state.hp as i32)).color(egui::Color32::WHITE).strong());
+                        ui.label(
+                            egui::RichText::new("Здоровье")
+                                .color(egui::Color32::from_rgb(170, 170, 187)),
+                        );
+                        ui.label(
+                            egui::RichText::new(format!("{}", game_state.hp as i32))
+                                .color(egui::Color32::WHITE)
+                                .strong(),
+                        );
                     });
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Деньги").color(egui::Color32::from_rgb(170, 170, 187)));
-                        ui.label(egui::RichText::new(format!("${}", game_state.cash)).color(egui::Color32::WHITE).strong());
+                        ui.label(
+                            egui::RichText::new("Деньги")
+                                .color(egui::Color32::from_rgb(170, 170, 187)),
+                        );
+                        ui.label(
+                            egui::RichText::new(format!("${}", game_state.cash))
+                                .color(egui::Color32::WHITE)
+                                .strong(),
+                        );
                     });
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Режим").color(egui::Color32::from_rgb(170, 170, 187)));
-                        let mode = if game_state.in_vehicle.is_some() { "ЗА РУЛЁМ" } else { "ПЕШКОМ" };
-                        ui.label(egui::RichText::new(mode).color(egui::Color32::from_rgb(255, 204, 51)).strong());
+                        ui.label(
+                            egui::RichText::new("Режим")
+                                .color(egui::Color32::from_rgb(170, 170, 187)),
+                        );
+                        let mode = if game_state.in_vehicle.is_some() {
+                            "ЗА РУЛЁМ"
+                        } else {
+                            "ПЕШКОМ"
+                        };
+                        ui.label(
+                            egui::RichText::new(mode)
+                                .color(egui::Color32::from_rgb(255, 204, 51))
+                                .strong(),
+                        );
                     });
                 });
         });
@@ -131,9 +156,14 @@ pub fn update_hud(
         .anchor(egui::Align2::LEFT_BOTTOM, egui::vec2(18.0, -18.0))
         .show(ctx, |ui| {
             let size = 190.0;
-            let (rect, _resp) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
+            let (rect, _resp) =
+                ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
             let painter = ui.painter().with_clip_rect(rect);
-            painter.circle_filled(rect.center(), size / 2.0, egui::Color32::from_rgb(26, 42, 26));
+            painter.circle_filled(
+                rect.center(),
+                size / 2.0,
+                egui::Color32::from_rgb(26, 42, 26),
+            );
             let center = rect.center();
             let rot = -yaw + std::f32::consts::PI;
             let scale = 0.32;
@@ -141,10 +171,7 @@ pub fn update_hud(
             // Roads
             for i in 0..=GRID {
                 let c = -CITY_HALF + i as f32 * STEP;
-                let (rx, ry) = (
-                    (c - player_pos.x) * scale,
-                    (c - player_pos.z) * scale,
-                );
+                let (rx, ry) = ((c - player_pos.x) * scale, (c - player_pos.z) * scale);
                 let p1 = rotate2d(-CITY_HALF * scale, ry, rot);
                 let p2 = rotate2d(CITY_HALF * scale, ry, rot);
                 painter.line_segment(
@@ -199,10 +226,13 @@ pub fn update_hud(
                         ui.set_min_width(150.0);
                         ui.vertical_centered(|ui| {
                             ui.label(
-                                egui::RichText::new(format!("{}", game_state.last_speed_kmh as i32))
-                                    .color(egui::Color32::from_rgb(255, 204, 51))
-                                    .size(34.0)
-                                    .strong(),
+                                egui::RichText::new(format!(
+                                    "{}",
+                                    game_state.last_speed_kmh as i32
+                                ))
+                                .color(egui::Color32::from_rgb(255, 204, 51))
+                                .size(34.0)
+                                .strong(),
                             );
                             ui.label(
                                 egui::RichText::new("КМ/Ч")
@@ -226,7 +256,10 @@ pub fn update_hud(
             .show(ctx, |ui| {
                 egui::Frame::popup(ui.style())
                     .fill(egui::Color32::from_black_alpha(217))
-                    .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 204, 51)))
+                    .stroke(egui::Stroke::new(
+                        1.0,
+                        egui::Color32::from_rgb(255, 204, 51),
+                    ))
                     .show(ui, |ui| {
                         ui.label(
                             egui::RichText::new(msg)

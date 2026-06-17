@@ -4,8 +4,8 @@ use bevy::prelude::*;
 use rand::Rng;
 use std::f32::consts::PI;
 
-use crate::resources::{GameAssets, GameState, CITY_HALF, GRID, ROAD_W, STEP};
 use crate::player::Player;
+use crate::resources::{GameAssets, GameState, CITY_HALF, GRID, ROAD_W, STEP};
 
 #[derive(Component)]
 pub struct Pedestrian {
@@ -88,7 +88,11 @@ pub fn spawn_peds(mut commands: Commands, assets: Res<GameAssets>) {
         } else {
             (
                 Vec3::new(coord + side_offset, 0.3, along),
-                if rng.gen_bool(0.5) { PI / 2.0 } else { -PI / 2.0 },
+                if rng.gen_bool(0.5) {
+                    PI / 2.0
+                } else {
+                    -PI / 2.0
+                },
             )
         };
 
@@ -105,7 +109,12 @@ pub fn spawn_peds(mut commands: Commands, assets: Res<GameAssets>) {
                     phase: rng.gen::<f32>() * 2.0 * PI,
                     change_in: 2.0 + rng.gen::<f32>() * 5.0,
                 },
-                PedLimbs { arm_l, arm_r, leg_l, leg_r },
+                PedLimbs {
+                    arm_l,
+                    arm_r,
+                    leg_l,
+                    leg_r,
+                },
             ))
             .id();
 
@@ -148,9 +157,7 @@ pub fn update_peds(
         transform.translation.z = transform.translation.z.clamp(-lim, lim);
 
         // Avoid player if too close
-        if game_state.in_vehicle.is_none()
-            && player_pos.distance(transform.translation) < 1.2
-        {
+        if game_state.in_vehicle.is_none() && player_pos.distance(transform.translation) < 1.2 {
             let mut away = transform.translation - player_pos;
             away.y = 0.0;
             away = away.normalize_or_zero();
