@@ -3,14 +3,14 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::city::Building;
 use crate::resources::{GameAssets, GameState, KeysPressed, CITY_HALF, GRID, STEP};
+use crate::city::Building;
 
 #[derive(Component)]
 pub struct Car {
-    pub axis: Axis, // current driving axis
-    pub dir: f32,   // +1 or -1
-    pub speed: f32, // AI cruise speed (used when not player-driven)
+    pub axis: Axis,
+    pub dir: f32,
+    pub speed: f32,
     pub color_idx: usize,
 }
 
@@ -26,7 +26,7 @@ pub struct CarWheels {
     pub fr: Entity,
     pub rl: Entity,
     pub rr: Entity,
-    pub spin: f32, // accumulated wheel spin (radians) for visual
+    pub spin: f32,
 }
 
 pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
@@ -42,14 +42,11 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
         let dir = if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
 
         let (pos, rot_y) = match axis {
-            Axis::X => (
-                Vec3::new(along, 0.0, coord + lane_offset),
-                std::f32::consts::PI / 2.0,
-            ),
+            Axis::X => (Vec3::new(along, 0.0, coord + lane_offset), std::f32::consts::PI / 2.0),
             Axis::Z => (Vec3::new(coord + lane_offset, 0.0, along), 0.0),
         };
 
-        // Spawn wheel children first, capture their entity IDs.
+        // Wheels
         let wheel_pos = [
             (-0.95, 0.35, 1.3),
             (0.95, 0.35, 1.3),
@@ -71,7 +68,6 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
             })
             .collect();
 
-        // Body + cabin + windshield + lights
         let body = commands
             .spawn(PbrBundle {
                 mesh: assets.mesh_car_body.clone(),
@@ -124,7 +120,6 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
             })
             .collect();
 
-        // Spawn the car root entity (a SpatialBundle) holding Car + CarWheels.
         let car_entity = commands
             .spawn((
                 SpatialBundle {
@@ -149,7 +144,6 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
             ))
             .id();
 
-        // Properly parent all children to the car root.
         let mut all_children = wheel_entities.clone();
         all_children.push(body);
         all_children.push(cabin);
@@ -194,20 +188,14 @@ pub fn update_ai_cars(
             }
             wheels.spin = wheels.spin.clamp(-10.0, max_speed);
 
-            // Steering: A = left, D = right. Turn rate scales with speed.
             let mut steer = 0.0;
-            if keys.a {
-                steer -= 1.0;
-            }
-            if keys.d {
-                steer += 1.0;
-            }
+            if keys.a { steer -= 1.0; }
+            if keys.d { steer += 1.0; }
             let speed_factor = (wheels.spin.abs() / 6.0).min(1.0);
             let yaw_delta = steer * 1.6 * dt * speed_factor * wheels.spin.signum();
             let new_yaw = transform.rotation.to_euler(EulerRot::YXZ).0 + yaw_delta;
             transform.rotation = Quat::from_rotation_y(new_yaw);
 
-            // Forward motion in local +Z
             let fwd = transform.rotation * Vec3::new(0.0, 0.0, 1.0);
             let next = transform.translation + fwd * wheels.spin * dt;
 
@@ -222,11 +210,11 @@ pub fn update_ai_cars(
             transform.translation.x = transform.translation.x.clamp(-lim, lim);
             transform.translation.z = transform.translation.z.clamp(-lim, lim);
 
+            // Update HUD speedometer (m/s → km/h)
+            game_state.last_speed_kmh = (wheels.spin.abs() * 3.6).round();
+
             // Apply wheel spin visually
             apply_wheel_spin(&mut wheels, &mut wheel_transforms, wheels.spin * dt);
-
-            // Update HUD speedometer reading (m/s → km/h)
-            game_state.last_speed_kmh = (wheels.spin.abs() * 3.6).round();
 
             car.speed = wheels.spin;
             continue;
@@ -246,11 +234,9 @@ pub fn update_ai_cars(
         match car.axis {
             Axis::X => {
                 transform.translation.x += delta;
-                transform.rotation = Quat::from_rotation_y(if car.dir > 0.0 {
-                    std::f32::consts::PI / 2.0
-                } else {
-                    -std::f32::consts::PI / 2.0
-                });
+                transform.rotation = Quat::from_rotation_y(
+                    if car.dir > 0.0 { std::f32::consts::PI / 2.0 } else { -std::f32::consts::PI / 2.0 },
+                );
                 if transform.translation.x > CITY_HALF + 5.0 {
                     transform.translation.x = -CITY_HALF - 5.0;
                 }
@@ -260,11 +246,9 @@ pub fn update_ai_cars(
             }
             Axis::Z => {
                 transform.translation.z += delta;
-                transform.rotation = Quat::from_rotation_y(if car.dir > 0.0 {
-                    0.0
-                } else {
-                    std::f32::consts::PI
-                });
+                transform.rotation = Quat::from_rotation_y(
+                    if car.dir > 0.0 { 0.0 } else { std::f32::consts::PI },
+                );
                 if transform.translation.z > CITY_HALF + 5.0 {
                     transform.translation.z = -CITY_HALF - 5.0;
                 }
@@ -274,7 +258,6 @@ pub fn update_ai_cars(
             }
         }
 
-        // Spin visual: accumulate and apply
         apply_wheel_spin(&mut wheels, &mut wheel_transforms, delta);
 
         // Random turn at intersection
@@ -305,16 +288,21 @@ pub fn update_ai_cars(
 }
 
 /// Update each wheel's local rotation = base_z_rotation * spin_y_rotation.
+/// Note: we copy Entity IDs out first to avoid the simultaneous
+/// `&mut wheels` (for `wheels.spin`) and `&wheels.fl/fr/...` borrow.
 fn apply_wheel_spin(
     wheels: &mut CarWheels,
     transforms: &mut Query<&mut Transform, Without<Car>>,
     delta: f32,
 ) {
     wheels.spin += delta * 2.0;
+    let spin_value = wheels.spin;
+    let ents = [wheels.fl, wheels.fr, wheels.rl, wheels.rr];
+
     let base = Quat::from_rotation_z(std::f32::consts::PI / 2.0);
-    let spin = Quat::from_rotation_y(wheels.spin);
+    let spin = Quat::from_rotation_y(spin_value);
     let final_rot = base * spin;
-    for e in [wheels.fl, wheels.fr, wheels.rl, wheels.rr] {
+    for e in ents {
         if let Ok(mut t) = transforms.get_mut(e) {
             t.rotation = final_rot;
         }

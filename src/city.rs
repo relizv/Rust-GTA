@@ -1,14 +1,10 @@
 //! City generation: ground, roads, dashed lane lines, sidewalks, buildings.
-//!
-//! Mirrors the JS layout: a GRID×GRID grid of blocks separated by roads of
-//! width ROAD_W. Each block is raised sidewalk pad with 1-3 subdivided lots,
-//! each lot hosting a building of random height and color, with a grid of
-//! emissive "windows" on each facade.
 
+use bevy::math::{Cuboid, Plane3d, Rectangle};
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::resources::{GameAssets, BLOCK, CITY_HALF, GRID, ROAD_W, SIDEWALK_W, STEP};
+use crate::resources::{GameAssets, GRID, STEP, BLOCK, ROAD_W, SIDEWALK_W, CITY_HALF};
 
 #[derive(Component)]
 pub struct Building {
@@ -31,7 +27,10 @@ pub fn build_city(
 
     // --- Ground (grass) ---
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane::from_size(800.0))),
+        mesh: meshes.add(Plane3d {
+            normal: Vec3::Y,
+            half_size: Vec2::splat(400.0),
+        }),
         material: assets.mat_ground.clone(),
         transform: Transform::from_xyz(0.0, 0.0, 0.0),
         ..default()
@@ -43,10 +42,10 @@ pub fn build_city(
 
         // Road along X (varies X, fixed Z)
         commands.spawn(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Plane::from_size(
-                CITY_HALF * 2.0 + STEP,
-                ROAD_W,
-            ))),
+            mesh: meshes.add(Plane3d {
+                normal: Vec3::Y,
+                half_size: Vec2::new((CITY_HALF * 2.0 + STEP) / 2.0, ROAD_W / 2.0),
+            }),
             material: assets.mat_road.clone(),
             transform: Transform::from_xyz(0.0, 0.02, coord),
             ..default()
@@ -54,10 +53,10 @@ pub fn build_city(
 
         // Road along Z (varies Z, fixed X)
         commands.spawn(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Plane::from_size(
-                ROAD_W,
-                CITY_HALF * 2.0 + STEP,
-            ))),
+            mesh: meshes.add(Plane3d {
+                normal: Vec3::Y,
+                half_size: Vec2::new(ROAD_W / 2.0, (CITY_HALF * 2.0 + STEP) / 2.0),
+            }),
             material: assets.mat_road.clone(),
             transform: Transform::from_xyz(coord, 0.02, 0.0),
             ..default()
@@ -66,16 +65,14 @@ pub fn build_city(
         // --- Dashed center line on each road ---
         let mut x = -CITY_HALF;
         while x < CITY_HALF {
-            // along X
             commands.spawn(PbrBundle {
-                mesh: meshes.add(Mesh::from(shape::Plane::from_size(3.0, 0.25))),
+                mesh: meshes.add(Rectangle::new(3.0, 0.25)),
                 material: assets.mat_line_white.clone(),
                 transform: Transform::from_xyz(x + 1.5, 0.03, coord),
                 ..default()
             });
-            // along Z
             commands.spawn(PbrBundle {
-                mesh: meshes.add(Mesh::from(shape::Plane::from_size(0.25, 3.0))),
+                mesh: meshes.add(Rectangle::new(0.25, 3.0)),
                 material: assets.mat_line_white.clone(),
                 transform: Transform::from_xyz(coord, 0.03, x + 1.5),
                 ..default()
@@ -93,11 +90,11 @@ pub fn build_city(
             // Sidewalk pad
             commands.spawn((
                 PbrBundle {
-                    mesh: meshes.add(Mesh::from(shape::Box::new(
+                    mesh: meshes.add(Cuboid::new(
                         BLOCK + SIDEWALK_W * 2.0,
                         0.3,
                         BLOCK + SIDEWALK_W * 2.0,
-                    ))),
+                    )),
                     material: assets.mat_sidewalk.clone(),
                     transform: Transform::from_xyz(cx, 0.15, cz),
                     ..default()
@@ -151,10 +148,10 @@ fn spawn_building<R: Rng>(
     rng: &mut R,
 ) {
     // Body
-    let body_entity = commands
+    commands
         .spawn((
             PbrBundle {
-                mesh: meshes.add(Mesh::from(shape::Box::new(w, h, d))),
+                mesh: meshes.add(Cuboid::new(w, h, d)),
                 material: assets.mat_building_colors[color_idx].clone(),
                 transform: Transform::from_xyz(cx, h / 2.0 + 0.3, cz),
                 ..default()
@@ -177,20 +174,14 @@ fn spawn_building<R: Rng>(
         for c in 0..cols_x {
             let x = -w / 2.0 + (c as f32 + 0.5) * (w / cols_x as f32);
             let on = rng.gen_bool(0.35);
-            let mat = if on {
-                assets.mat_window_on.clone()
-            } else {
-                assets.mat_window_off.clone()
-            };
+            let mat = if on { assets.mat_window_on.clone() } else { assets.mat_window_off.clone() };
 
-            // +Z face: no rotation (Quad is in XY by default, normal +Z)
             commands.spawn(PbrBundle {
                 mesh: assets.mesh_window.clone(),
                 material: mat.clone(),
                 transform: Transform::from_xyz(cx + x, y, cz + d / 2.0 + 0.01),
                 ..default()
             });
-            // -Z face: rotate 180° around Y so normal faces -Z
             commands.spawn(PbrBundle {
                 mesh: assets.mesh_window.clone(),
                 material: mat,
@@ -204,13 +195,8 @@ fn spawn_building<R: Rng>(
         for c in 0..cols_z {
             let z = -d / 2.0 + (c as f32 + 0.5) * (d / cols_z as f32);
             let on = rng.gen_bool(0.35);
-            let mat = if on {
-                assets.mat_window_on.clone()
-            } else {
-                assets.mat_window_off.clone()
-            };
+            let mat = if on { assets.mat_window_on.clone() } else { assets.mat_window_off.clone() };
 
-            // +X face: rotate +90° around Y so normal faces +X
             commands.spawn(PbrBundle {
                 mesh: assets.mesh_window.clone(),
                 material: mat.clone(),
@@ -218,7 +204,6 @@ fn spawn_building<R: Rng>(
                     .with_rotation(Quat::from_rotation_y(std::f32::consts::PI / 2.0)),
                 ..default()
             });
-            // -X face: rotate -90° around Y so normal faces -X
             commands.spawn(PbrBundle {
                 mesh: assets.mesh_window.clone(),
                 material: mat,
@@ -237,7 +222,4 @@ fn spawn_building<R: Rng>(
             .with_scale(Vec3::new(w * 0.4, 0.6, d * 0.4)),
         ..default()
     });
-
-    // Suppress unused warning
-    let _ = body_entity;
 }

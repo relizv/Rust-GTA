@@ -7,11 +7,10 @@ description = "A browser-style mini-GTA, ported from Three.js to Bevy"
 license = "MIT"
 
 [dependencies]
-bevy = "0.13"
-bevy_egui = "0.25"
+bevy = "0.15"
+bevy_egui = "0.31"
 rand = "0.8"
 
-# Bevy is heavy; the dev profile needs some opt-level to be playable.
 [profile.dev]
 opt-level = 2
 
