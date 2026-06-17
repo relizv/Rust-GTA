@@ -47,7 +47,7 @@ pub fn update_camera(
     };
     let desired = target + Vec3::new(0.0, height, 0.0) + offset;
 
-    let t = 1.0 - (-12.0 * time.delta_seconds()).exp();
+    let t = 1.0 - (-12.0 * time.delta_secs()).exp();
     camera_t.translation = camera_t.translation.lerp(desired, t);
 
     let look_height = if game_state.in_vehicle.is_some() {

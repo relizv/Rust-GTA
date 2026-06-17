@@ -72,14 +72,12 @@ fn main() {
 fn setup_world(mut commands: Commands) {
     // Camera with fog (matches the JS scene.background #87ceeb + fog 80..250)
     commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 10.0, 12.0).looking_at(Vec3::ZERO, Vec3::Y),
-            camera: Camera {
-                hdr: false,
-                ..default()
-            },
+        Camera3d::default(),
+        Camera {
+            hdr: false,
             ..default()
         },
+        Transform::from_xyz(0.0, 10.0, 12.0).looking_at(Vec3::ZERO, Vec3::Y),
         DistanceFog {
             color: Color::srgb(0.529, 0.808, 0.922),
             directional_light_color: Color::srgb(1.0, 0.957, 0.878),
@@ -117,16 +115,15 @@ fn setup_world(mut commands: Commands) {
     }
     .build();
 
-    commands.spawn((DirectionalLightBundle {
-        directional_light: DirectionalLight {
+    commands.spawn((
+        DirectionalLight {
             color: Color::srgb(1.0, 0.957, 0.878),
             illuminance: 1.0,
             shadows_enabled: true,
             shadow_depth_bias: -0.0005,
             ..default()
         },
-        cascade_shadow_config: cascade_config,
-        transform: Transform::from_xyz(60.0, 100.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    },));
+        cascade_config,
+        Transform::from_xyz(60.0, 100.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
 }

@@ -27,52 +27,46 @@ pub fn spawn_peds(mut commands: Commands, assets: Res<GameAssets>) {
 
     for _ in 0..22 {
         let arm_l = commands
-            .spawn(PbrBundle {
-                mesh: assets.mesh_player_arm.clone(),
-                material: assets.mat_player_shirt.clone(),
-                transform: Transform::from_xyz(-0.36, 1.05, 0.0),
-                ..default()
-            })
+            .spawn((
+                Mesh3d(assets.mesh_player_arm.clone()),
+                MeshMaterial3d(assets.mat_player_shirt.clone()),
+                Transform::from_xyz(-0.36, 1.05, 0.0),
+            ))
             .id();
         let arm_r = commands
-            .spawn(PbrBundle {
-                mesh: assets.mesh_player_arm.clone(),
-                material: assets.mat_player_shirt.clone(),
-                transform: Transform::from_xyz(0.36, 1.05, 0.0),
-                ..default()
-            })
+            .spawn((
+                Mesh3d(assets.mesh_player_arm.clone()),
+                MeshMaterial3d(assets.mat_player_shirt.clone()),
+                Transform::from_xyz(0.36, 1.05, 0.0),
+            ))
             .id();
         let leg_l = commands
-            .spawn(PbrBundle {
-                mesh: assets.mesh_player_leg.clone(),
-                material: assets.mat_player_pants.clone(),
-                transform: Transform::from_xyz(-0.14, 0.35, 0.0),
-                ..default()
-            })
+            .spawn((
+                Mesh3d(assets.mesh_player_leg.clone()),
+                MeshMaterial3d(assets.mat_player_pants.clone()),
+                Transform::from_xyz(-0.14, 0.35, 0.0),
+            ))
             .id();
         let leg_r = commands
-            .spawn(PbrBundle {
-                mesh: assets.mesh_player_leg.clone(),
-                material: assets.mat_player_pants.clone(),
-                transform: Transform::from_xyz(0.14, 0.35, 0.0),
-                ..default()
-            })
+            .spawn((
+                Mesh3d(assets.mesh_player_leg.clone()),
+                MeshMaterial3d(assets.mat_player_pants.clone()),
+                Transform::from_xyz(0.14, 0.35, 0.0),
+            ))
             .id();
         let torso = commands
-            .spawn(PbrBundle {
-                mesh: assets.mesh_player_torso.clone(),
-                material: assets.mat_player_shirt.clone(),
-                transform: Transform::from_xyz(0.0, 1.05, 0.0),
-                ..default()
-            })
+            .spawn((
+                Mesh3d(assets.mesh_player_torso.clone()),
+                MeshMaterial3d(assets.mat_player_shirt.clone()),
+                Transform::from_xyz(0.0, 1.05, 0.0),
+            ))
             .id();
         let head = commands
-            .spawn(PbrBundle {
-                mesh: assets.mesh_player_head.clone(),
-                material: assets.mat_player_skin.clone(),
-                transform: Transform::from_xyz(0.0, 1.6, 0.0),
-                ..default()
-            })
+            .spawn((
+                Mesh3d(assets.mesh_player_head.clone()),
+                MeshMaterial3d(assets.mat_player_skin.clone()),
+                Transform::from_xyz(0.0, 1.6, 0.0),
+            ))
             .id();
 
         // Place on a sidewalk
@@ -98,12 +92,9 @@ pub fn spawn_peds(mut commands: Commands, assets: Res<GameAssets>) {
 
         let ped_root = commands
             .spawn((
-                SpatialBundle {
-                    transform: Transform::from_translation(pos)
-                        .with_rotation(Quat::from_rotation_y(rot_y)),
-                    visibility: Visibility::Visible,
-                    ..default()
-                },
+                Transform::from_translation(pos)
+                    .with_rotation(Quat::from_rotation_y(rot_y)),
+                Visibility::Visible,
                 Pedestrian {
                     speed: 1.0 + rng.gen::<f32>() * 0.7,
                     phase: rng.gen::<f32>() * 2.0 * PI,
@@ -120,7 +111,7 @@ pub fn spawn_peds(mut commands: Commands, assets: Res<GameAssets>) {
 
         commands
             .entity(ped_root)
-            .push_children(&[torso, head, arm_l, arm_r, leg_l, leg_r]);
+            .add_children(&[torso, head, arm_l, arm_r, leg_l, leg_r]);
     }
 }
 
@@ -131,7 +122,7 @@ pub fn update_peds(
     mut limb_q: Query<&mut Transform, (Without<Player>, Without<Pedestrian>)>,
     player_q: Query<&Transform, With<Player>>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     let player_pos = player_q
         .get_single()
         .map(|t| t.translation)
