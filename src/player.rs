@@ -29,69 +29,59 @@ pub struct PlayerLimbs {
 
 pub fn spawn_player(mut commands: Commands, assets: Res<GameAssets>) {
     let arm_l = commands
-        .spawn(PbrBundle {
-            mesh: assets.mesh_player_arm.clone(),
-            material: assets.mat_player_shirt.clone(),
-            transform: Transform::from_xyz(-0.36, 1.05, 0.0),
-            ..default()
-        })
+        .spawn((
+            Mesh3d(assets.mesh_player_arm.clone()),
+            MeshMaterial3d(assets.mat_player_shirt.clone()),
+            Transform::from_xyz(-0.36, 1.05, 0.0),
+        ))
         .id();
     let arm_r = commands
-        .spawn(PbrBundle {
-            mesh: assets.mesh_player_arm.clone(),
-            material: assets.mat_player_shirt.clone(),
-            transform: Transform::from_xyz(0.36, 1.05, 0.0),
-            ..default()
-        })
+        .spawn((
+            Mesh3d(assets.mesh_player_arm.clone()),
+            MeshMaterial3d(assets.mat_player_shirt.clone()),
+            Transform::from_xyz(0.36, 1.05, 0.0),
+        ))
         .id();
     let leg_l = commands
-        .spawn(PbrBundle {
-            mesh: assets.mesh_player_leg.clone(),
-            material: assets.mat_player_pants.clone(),
-            transform: Transform::from_xyz(-0.14, 0.35, 0.0),
-            ..default()
-        })
+        .spawn((
+            Mesh3d(assets.mesh_player_leg.clone()),
+            MeshMaterial3d(assets.mat_player_pants.clone()),
+            Transform::from_xyz(-0.14, 0.35, 0.0),
+        ))
         .id();
     let leg_r = commands
-        .spawn(PbrBundle {
-            mesh: assets.mesh_player_leg.clone(),
-            material: assets.mat_player_pants.clone(),
-            transform: Transform::from_xyz(0.14, 0.35, 0.0),
-            ..default()
-        })
+        .spawn((
+            Mesh3d(assets.mesh_player_leg.clone()),
+            MeshMaterial3d(assets.mat_player_pants.clone()),
+            Transform::from_xyz(0.14, 0.35, 0.0),
+        ))
         .id();
     let torso = commands
-        .spawn(PbrBundle {
-            mesh: assets.mesh_player_torso.clone(),
-            material: assets.mat_player_shirt.clone(),
-            transform: Transform::from_xyz(0.0, 1.05, 0.0),
-            ..default()
-        })
+        .spawn((
+            Mesh3d(assets.mesh_player_torso.clone()),
+            MeshMaterial3d(assets.mat_player_shirt.clone()),
+            Transform::from_xyz(0.0, 1.05, 0.0),
+        ))
         .id();
     let head = commands
-        .spawn(PbrBundle {
-            mesh: assets.mesh_player_head.clone(),
-            material: assets.mat_player_skin.clone(),
-            transform: Transform::from_xyz(0.0, 1.6, 0.0),
-            ..default()
-        })
+        .spawn((
+            Mesh3d(assets.mesh_player_head.clone()),
+            MeshMaterial3d(assets.mat_player_skin.clone()),
+            Transform::from_xyz(0.0, 1.6, 0.0),
+        ))
         .id();
     let hair = commands
-        .spawn(PbrBundle {
-            mesh: assets.mesh_unit_box.clone(),
-            material: assets.mat_player_hair.clone(),
-            transform: Transform::from_xyz(0.0, 1.78, 0.0).with_scale(Vec3::new(0.34, 0.1, 0.34)),
-            ..default()
-        })
+        .spawn((
+            Mesh3d(assets.mesh_unit_box.clone()),
+            MeshMaterial3d(assets.mat_player_hair.clone()),
+            Transform::from_xyz(0.0, 1.78, 0.0).with_scale(Vec3::new(0.34, 0.1, 0.34)),
+        ))
         .id();
 
     let player_root = commands
         .spawn((
-            SpatialBundle {
-                transform: Transform::from_xyz(0.0, 0.0, ROAD_W + 2.0),
-                visibility: Visibility::Visible,
-                ..default()
-            },
+            Transform::from_xyz(0.0, 0.0, ROAD_W + 2.0),
+            Visibility::Visible,
             Player,
             PlayerState {
                 vel: Vec3::ZERO,
@@ -109,7 +99,7 @@ pub fn spawn_player(mut commands: Commands, assets: Res<GameAssets>) {
 
     commands
         .entity(player_root)
-        .push_children(&[torso, head, hair, arm_l, arm_r, leg_l, leg_r]);
+        .add_children(&[torso, head, hair, arm_l, arm_r, leg_l, leg_r]);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -231,9 +221,9 @@ pub fn update_player(
         state.vel.y = 7.5;
         state.on_ground = false;
     }
-    state.vel.y -= 22.0 * time.delta_seconds();
+    state.vel.y -= 22.0 * time.delta_secs();
 
-    transform.translation += state.vel * time.delta_seconds();
+    transform.translation += state.vel * time.delta_secs();
     if transform.translation.y <= 0.0 {
         transform.translation.y = 0.0;
         state.vel.y = 0.0;
@@ -250,7 +240,7 @@ pub fn update_player(
 
     // --- Animate limbs ---
     let speed2 = state.vel.x.hypot(state.vel.z);
-    let t = time.elapsed_seconds() * if keys.shift { 1.6 } else { 1.0 };
+    let t = time.elapsed_secs() * if keys.shift { 1.6 } else { 1.0 };
     animate_limb(&mut limb_q, limbs.arm_l, speed2, t, 0.5, true);
     animate_limb(&mut limb_q, limbs.arm_r, speed2, t, 0.5, false);
     animate_limb(&mut limb_q, limbs.leg_l, speed2, t, 0.7, true);
@@ -301,13 +291,13 @@ fn do_punch(
 
 pub fn update_wanted_decay(time: Res<Time>, mut game_state: ResMut<GameState>) {
     if let Some((_, t)) = &mut game_state.toast {
-        *t -= time.delta_seconds();
+        *t -= time.delta_secs();
         if *t <= 0.0 {
             game_state.toast = None;
         }
     }
     if game_state.wanted > 0 {
-        game_state.wanted_decay_timer += time.delta_seconds();
+        game_state.wanted_decay_timer += time.delta_secs();
         if game_state.wanted_decay_timer > 18.0 {
             game_state.wanted -= 1;
             game_state.wanted_decay_timer = 0.0;

@@ -123,7 +123,7 @@ pub fn setup_game_assets(
     // direct struct construction with `half_size` (half of full dimensions).
     let mesh_unit_box = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
     let mesh_unit_plane = meshes.add(Plane3d {
-        normal: Vec3::Y,
+        normal: Dir3::Y,
         half_size: Vec2::splat(0.5),
     });
     let mesh_cylinder_wheel = meshes.add(Cylinder::new(0.35, 0.25));

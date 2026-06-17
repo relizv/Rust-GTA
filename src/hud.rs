@@ -56,8 +56,8 @@ pub fn update_hud(
                         game_state.started = true;
                         if let Ok(mut window) = windows.get_single_mut() {
                             input_state.cursor_locked = true;
-                            window.cursor.visible = false;
-                            window.cursor.grab_mode = CursorGrabMode::Locked;
+                            window.cursor_options.visible = false;
+                            window.cursor_options.grab_mode = CursorGrabMode::Locked;
                         }
                     }
                     ui.add_space(36.0);

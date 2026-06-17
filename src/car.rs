@@ -61,51 +61,46 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
             .iter()
             .map(|(x, y, z)| {
                 commands
-                    .spawn(PbrBundle {
-                        mesh: assets.mesh_cylinder_wheel.clone(),
-                        material: assets.mat_wheel.clone(),
-                        transform: Transform::from_xyz(*x, *y, *z).with_rotation(wheel_rot),
-                        ..default()
-                    })
+                    .spawn((
+                        Mesh3d(assets.mesh_cylinder_wheel.clone()),
+                        MeshMaterial3d(assets.mat_wheel.clone()),
+                        Transform::from_xyz(*x, *y, *z).with_rotation(wheel_rot),
+                    ))
                     .id()
             })
             .collect();
 
         let body = commands
-            .spawn(PbrBundle {
-                mesh: assets.mesh_car_body.clone(),
-                material: assets.mat_car_colors[color_idx].clone(),
-                transform: Transform::from_xyz(0.0, 0.7, 0.0),
-                ..default()
-            })
+            .spawn((
+                Mesh3d(assets.mesh_car_body.clone()),
+                MeshMaterial3d(assets.mat_car_colors[color_idx].clone()),
+                Transform::from_xyz(0.0, 0.7, 0.0),
+            ))
             .id();
         let cabin = commands
-            .spawn(PbrBundle {
-                mesh: assets.mesh_car_cabin.clone(),
-                material: assets.mat_car_colors[color_idx].clone(),
-                transform: Transform::from_xyz(0.0, 1.3, -0.1),
-                ..default()
-            })
+            .spawn((
+                Mesh3d(assets.mesh_car_cabin.clone()),
+                MeshMaterial3d(assets.mat_car_colors[color_idx].clone()),
+                Transform::from_xyz(0.0, 1.3, -0.1),
+            ))
             .id();
         let windshield = commands
-            .spawn(PbrBundle {
-                mesh: assets.mesh_car_windshield.clone(),
-                material: assets.mat_windshield.clone(),
-                transform: Transform::from_xyz(0.0, 1.3, 0.95)
+            .spawn((
+                Mesh3d(assets.mesh_car_windshield.clone()),
+                MeshMaterial3d(assets.mat_windshield.clone()),
+                Transform::from_xyz(0.0, 1.3, 0.95)
                     .with_rotation(Quat::from_rotation_x(-std::f32::consts::PI / 2.0 + 0.5)),
-                ..default()
-            })
+            ))
             .id();
         let headlights: Vec<Entity> = [-0.6_f32, 0.6]
             .iter()
             .map(|x| {
                 commands
-                    .spawn(PbrBundle {
-                        mesh: assets.mesh_car_headlight.clone(),
-                        material: assets.mat_headlight.clone(),
-                        transform: Transform::from_xyz(*x, 0.7, 2.1),
-                        ..default()
-                    })
+                    .spawn((
+                        Mesh3d(assets.mesh_car_headlight.clone()),
+                        MeshMaterial3d(assets.mat_headlight.clone()),
+                        Transform::from_xyz(*x, 0.7, 2.1),
+                    ))
                     .id()
             })
             .collect();
@@ -113,24 +108,19 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
             .iter()
             .map(|x| {
                 commands
-                    .spawn(PbrBundle {
-                        mesh: assets.mesh_car_headlight.clone(),
-                        material: assets.mat_taillight.clone(),
-                        transform: Transform::from_xyz(*x, 0.7, -2.1),
-                        ..default()
-                    })
+                    .spawn((
+                        Mesh3d(assets.mesh_car_headlight.clone()),
+                        MeshMaterial3d(assets.mat_taillight.clone()),
+                        Transform::from_xyz(*x, 0.7, -2.1),
+                    ))
                     .id()
             })
             .collect();
 
         let car_entity = commands
             .spawn((
-                SpatialBundle {
-                    transform: Transform::from_translation(pos)
-                        .with_rotation(Quat::from_rotation_y(rot_y)),
-                    visibility: Visibility::Visible,
-                    ..default()
-                },
+                Transform::from_translation(pos).with_rotation(Quat::from_rotation_y(rot_y)),
+                Visibility::Visible,
                 Car {
                     axis,
                     dir,
@@ -153,7 +143,7 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
         all_children.push(windshield);
         all_children.extend(headlights);
         all_children.extend(taillights);
-        commands.entity(car_entity).push_children(&all_children);
+        commands.entity(car_entity).add_children(&all_children);
     }
 }
 
@@ -167,7 +157,7 @@ pub fn update_ai_cars(
     buildings: Query<&Building>,
 ) {
     let mut rng = rand::thread_rng();
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     let player_pos = player_q
         .get_single()
         .map(|t| t.translation)
