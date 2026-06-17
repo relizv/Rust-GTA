@@ -210,8 +210,10 @@ pub fn update_ai_cars(
             // Update HUD speedometer (m/s → km/h)
             game_state.last_speed_kmh = (wheels.spin.abs() * 3.6).round();
 
-            // Apply wheel spin visually
-            apply_wheel_spin(&mut wheels, &mut wheel_transforms, wheels.spin * dt);
+            // Apply wheel spin visually.
+            // Read `wheels.spin * dt` before the mutable borrow of `wheels`.
+            let spin_delta = wheels.spin * dt;
+            apply_wheel_spin(&mut wheels, &mut wheel_transforms, spin_delta);
 
             car.speed = wheels.spin;
             continue;

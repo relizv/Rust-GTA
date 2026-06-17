@@ -13,7 +13,6 @@ mod pedestrian;
 mod player;
 mod resources;
 
-use bevy::core_pipeline::fog::DistanceFog;
 use bevy::pbr::CascadeShadowConfigBuilder;
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
@@ -82,7 +81,7 @@ fn setup_world(mut commands: Commands) {
             color: Color::srgb(0.529, 0.808, 0.922),
             directional_light_color: Color::srgb(1.0, 0.957, 0.878),
             directional_light_exponent: 30.0,
-            falloff: bevy::core_pipeline::fog::FogFalloff::Linear {
+            falloff: FogFalloff::Linear {
                 start: 80.0,
                 end: 250.0,
             },
@@ -95,14 +94,9 @@ fn setup_world(mut commands: Commands) {
         brightness: 0.55,
     });
 
-    // Hemisphere light via PbrLightBundle / direct spawn.
-    // In Bevy 0.15 `HemisphereLight` is in `bevy::pbr`.
-    commands.spawn((
-        // Skip HemisphereLight (its bundle was removed in 0.15).
-        // HemisphereLight still exists in bevy::pbr but spawning it as a
-        // component-only entity is awkward; ambient + directional suffices.
-        SpatialBundle::default(),
-    ));
+    // Ambient + directional lights suffice for the scene's fill lighting.
+    // (HemisphereLight's bundle was removed; spawning it component-only is
+    // unnecessary here, so we rely on AmbientLight above.)
 
     // Sun (directional) with cascaded shadows covering the whole city.
     let cascade_config = CascadeShadowConfigBuilder {

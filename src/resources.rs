@@ -1,6 +1,5 @@
 //! Shared constants and resources for the game.
 
-use bevy::math::{Cuboid, Cylinder, Plane3d, Rectangle};
 use bevy::prelude::*;
 use bevy::render::mesh::Mesh;
 
