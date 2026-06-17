@@ -3,9 +3,9 @@
 use bevy::prelude::*;
 use std::f32::consts::PI;
 
-use crate::resources::{GameAssets, GameState, InputState, KeysPressed, CITY_HALF, ROAD_W};
 use crate::car::Car;
 use crate::pedestrian::Pedestrian;
+use crate::resources::{GameAssets, GameState, InputState, KeysPressed, CITY_HALF, ROAD_W};
 
 #[derive(Component)]
 pub struct Player;
@@ -98,7 +98,12 @@ pub fn spawn_player(mut commands: Commands, assets: Res<GameAssets>) {
                 yaw: 0.0,
                 on_ground: true,
             },
-            PlayerLimbs { arm_l, arm_r, leg_l, leg_r },
+            PlayerLimbs {
+                arm_l,
+                arm_r,
+                leg_l,
+                leg_r,
+            },
         ))
         .id();
 
@@ -117,7 +122,12 @@ pub fn update_player(
     mut game_state: ResMut<GameState>,
     mouse_buttons: Res<Input<bevy::input::mouse::MouseButton>>,
     mut player_q: Query<
-        (&mut PlayerState, &mut Transform, &PlayerLimbs, &mut Visibility),
+        (
+            &mut PlayerState,
+            &mut Transform,
+            &PlayerLimbs,
+            &mut Visibility,
+        ),
         With<Player>,
     >,
     mut limb_q: Query<&mut Transform, Without<Player>>,
@@ -198,10 +208,18 @@ pub fn update_player(
     let right = Vec3::new(yaw.cos(), 0.0, -yaw.sin());
 
     let mut move_vec = Vec3::ZERO;
-    if keys.w { move_vec += forward; }
-    if keys.s { move_vec -= forward; }
-    if keys.d { move_vec += right; }
-    if keys.a { move_vec -= right; }
+    if keys.w {
+        move_vec += forward;
+    }
+    if keys.s {
+        move_vec -= forward;
+    }
+    if keys.d {
+        move_vec += right;
+    }
+    if keys.a {
+        move_vec -= right;
+    }
 
     let speed = if keys.shift { 9.0 } else { 4.5 };
 
@@ -323,11 +341,7 @@ fn lerp_angle(a: f32, b: f32, t: f32) -> f32 {
     a + diff * t
 }
 
-fn collide_buildings(
-    pos: &mut Vec3,
-    radius: f32,
-    buildings: &Query<&crate::city::Building>,
-) {
+fn collide_buildings(pos: &mut Vec3, radius: f32, buildings: &Query<&crate::city::Building>) {
     for b in buildings.iter() {
         let dx = (pos.x - b.cx).abs();
         let dz = (pos.z - b.cz).abs();

@@ -155,13 +155,14 @@ pub fn setup_game_assets(
             ..default()
         })
     };
-    let emissive = |mats: &mut Assets<StandardMaterial>, color: Color| -> Handle<StandardMaterial> {
-        mats.add(StandardMaterial {
-            base_color: Color::BLACK,
-            emissive: color,
-            ..default()
-        })
-    };
+    let emissive =
+        |mats: &mut Assets<StandardMaterial>, color: Color| -> Handle<StandardMaterial> {
+            mats.add(StandardMaterial {
+                base_color: Color::BLACK,
+                emissive: color,
+                ..default()
+            })
+        };
     let unlit = |mats: &mut Assets<StandardMaterial>, color: Color| -> Handle<StandardMaterial> {
         mats.add(StandardMaterial {
             base_color: color,

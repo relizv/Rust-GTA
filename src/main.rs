@@ -45,8 +45,14 @@ fn main() {
         // Startup systems — order matters
         .add_systems(Startup, setup_world)
         .add_systems(Startup, resources::setup_game_assets.after(setup_world))
-        .add_systems(Startup, city::build_city.after(resources::setup_game_assets))
-        .add_systems(Startup, player::spawn_player.after(resources::setup_game_assets))
+        .add_systems(
+            Startup,
+            city::build_city.after(resources::setup_game_assets),
+        )
+        .add_systems(
+            Startup,
+            player::spawn_player.after(resources::setup_game_assets),
+        )
         .add_systems(Startup, car::spawn_cars.after(resources::setup_game_assets))
         .add_systems(
             Startup,

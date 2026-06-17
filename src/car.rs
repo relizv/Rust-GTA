@@ -3,8 +3,8 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::resources::{GameAssets, GameState, KeysPressed, CITY_HALF, GRID, STEP};
 use crate::city::Building;
+use crate::resources::{GameAssets, GameState, KeysPressed, CITY_HALF, GRID, STEP};
 
 #[derive(Component)]
 pub struct Car {
@@ -42,7 +42,10 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
         let dir = if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
 
         let (pos, rot_y) = match axis {
-            Axis::X => (Vec3::new(along, 0.0, coord + lane_offset), std::f32::consts::PI / 2.0),
+            Axis::X => (
+                Vec3::new(along, 0.0, coord + lane_offset),
+                std::f32::consts::PI / 2.0,
+            ),
             Axis::Z => (Vec3::new(coord + lane_offset, 0.0, along), 0.0),
         };
 
@@ -193,8 +196,12 @@ pub fn update_ai_cars(
 
             // Steering: A = left, D = right. Turn rate scales with speed.
             let mut steer = 0.0;
-            if keys.a { steer -= 1.0; }
-            if keys.d { steer += 1.0; }
+            if keys.a {
+                steer -= 1.0;
+            }
+            if keys.d {
+                steer += 1.0;
+            }
             let speed_factor = (wheels.spin.abs() / 6.0).min(1.0);
             let yaw_delta = steer * 1.6 * dt * speed_factor * wheels.spin.signum();
             let new_yaw = transform.rotation.to_euler(EulerRot::YXZ).0 + yaw_delta;
@@ -239,9 +246,11 @@ pub fn update_ai_cars(
         match car.axis {
             Axis::X => {
                 transform.translation.x += delta;
-                transform.rotation = Quat::from_rotation_y(
-                    if car.dir > 0.0 { std::f32::consts::PI / 2.0 } else { -std::f32::consts::PI / 2.0 },
-                );
+                transform.rotation = Quat::from_rotation_y(if car.dir > 0.0 {
+                    std::f32::consts::PI / 2.0
+                } else {
+                    -std::f32::consts::PI / 2.0
+                });
                 if transform.translation.x > CITY_HALF + 5.0 {
                     transform.translation.x = -CITY_HALF - 5.0;
                 }
@@ -251,9 +260,11 @@ pub fn update_ai_cars(
             }
             Axis::Z => {
                 transform.translation.z += delta;
-                transform.rotation = Quat::from_rotation_y(
-                    if car.dir > 0.0 { 0.0 } else { std::f32::consts::PI },
-                );
+                transform.rotation = Quat::from_rotation_y(if car.dir > 0.0 {
+                    0.0
+                } else {
+                    std::f32::consts::PI
+                });
                 if transform.translation.z > CITY_HALF + 5.0 {
                     transform.translation.z = -CITY_HALF - 5.0;
                 }
