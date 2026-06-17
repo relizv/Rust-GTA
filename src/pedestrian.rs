@@ -92,8 +92,7 @@ pub fn spawn_peds(mut commands: Commands, assets: Res<GameAssets>) {
 
         let ped_root = commands
             .spawn((
-                Transform::from_translation(pos)
-                    .with_rotation(Quat::from_rotation_y(rot_y)),
+                Transform::from_translation(pos).with_rotation(Quat::from_rotation_y(rot_y)),
                 Visibility::Visible,
                 Pedestrian {
                     speed: 1.0 + rng.gen::<f32>() * 0.7,

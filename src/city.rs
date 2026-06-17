@@ -211,7 +211,10 @@ fn spawn_building<R: Rng>(
     commands.spawn((
         Mesh3d(assets.mesh_unit_box.clone()),
         MeshMaterial3d(assets.mat_roof.clone()),
-        Transform::from_xyz(cx + w * 0.2, h + 0.6 + 0.3, cz - d * 0.15)
-            .with_scale(Vec3::new(w * 0.4, 0.6, d * 0.4)),
+        Transform::from_xyz(cx + w * 0.2, h + 0.6 + 0.3, cz - d * 0.15).with_scale(Vec3::new(
+            w * 0.4,
+            0.6,
+            d * 0.4,
+        )),
     ));
 }
