@@ -1,12 +1,6 @@
-//! Shared constants and resources.
-//!
-//! `GameState` — global mutable game state (hp, cash, wanted, in-vehicle).
-//! `InputState` — camera yaw/pitch and cursor lock flag.
-//! `KeysPressed` — current keyboard state (mirror of `Input<KeyCode>` but
-//!                 stored in a plain resource for easy access).
-//! `GameAssets` — pre-created shared mesh + material handles, populated in
-//!                 `setup_game_assets` after `Assets<T>` resources exist.
+//! Shared constants and resources for the game.
 
+use bevy::math::{Cuboid, Cylinder, Plane3d, Rectangle};
 use bevy::prelude::*;
 use bevy::render::mesh::Mesh;
 
@@ -28,8 +22,6 @@ pub struct GameState {
     pub in_vehicle: Option<Entity>,
     pub toast: Option<(String, f32)>,
     pub started: bool,
-    /// Last observed vehicle speed in km/h (updated by car::update_ai_cars
-    /// when the player is driving). Used by the HUD speedometer.
     pub last_speed_kmh: f32,
 }
 
@@ -59,7 +51,6 @@ impl GameState {
     }
 }
 
-// ----- Camera / cursor input state -----
 #[derive(Resource, Default)]
 pub struct InputState {
     pub yaw: f32,
@@ -67,7 +58,6 @@ pub struct InputState {
     pub cursor_locked: bool,
 }
 
-// ----- Keyboard mirror (for systems that want a snapshot) -----
 #[derive(Resource, Default, Debug)]
 pub struct KeysPressed {
     pub w: bool,
@@ -76,12 +66,11 @@ pub struct KeysPressed {
     pub d: bool,
     pub shift: bool,
     pub space: bool,
-    pub f_pressed: bool, // edge-triggered
-    pub r_pressed: bool, // edge-triggered
-    pub e_pressed: bool, // edge-triggered
+    pub f_pressed: bool,
+    pub r_pressed: bool,
+    pub e_pressed: bool,
 }
 
-// ----- Shared assets -----
 #[derive(Resource)]
 pub struct GameAssets {
     // Meshes
@@ -129,24 +118,26 @@ pub fn setup_game_assets(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    use bevy::prelude::shape;
-
-    // --- Meshes ---
-    let mesh_unit_box = meshes.add(Mesh::from(shape::Box::new(1.0, 1.0, 1.0)));
-    let mesh_unit_plane = meshes.add(Mesh::from(shape::Plane::from_size(1.0)));
-    let mesh_cylinder_wheel = meshes.add(Mesh::from(shape::Cylinder::new(0.35, 0.25, 12)));
-    let mesh_player_torso = meshes.add(Mesh::from(shape::Box::new(0.55, 0.7, 0.3)));
-    let mesh_player_head = meshes.add(Mesh::from(shape::Box::new(0.32, 0.34, 0.32)));
-    let mesh_player_arm = meshes.add(Mesh::from(shape::Box::new(0.16, 0.6, 0.18)));
-    let mesh_player_leg = meshes.add(Mesh::from(shape::Box::new(0.2, 0.7, 0.22)));
-    let mesh_car_body = meshes.add(Mesh::from(shape::Box::new(2.0, 0.7, 4.2)));
-    let mesh_car_cabin = meshes.add(Mesh::from(shape::Box::new(1.7, 0.7, 2.0)));
-    let mesh_car_windshield = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(1.6, 0.6))));
-    let mesh_car_headlight = meshes.add(Mesh::from(shape::Box::new(0.3, 0.15, 0.05)));
-    let mesh_window = meshes.add(Mesh::from(shape::Quad::new(Vec2::new(0.9, 1.4))));
+    // --- Meshes (Bevy 0.15 primitives in bevy::math) ---
+    // Note: Plane3d::new(normal) gives a 1x1 plane; for sized planes we use
+    // direct struct construction with `half_size` (half of full dimensions).
+    let mesh_unit_box = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    let mesh_unit_plane = meshes.add(Plane3d {
+        normal: Vec3::Y,
+        half_size: Vec2::splat(0.5),
+    });
+    let mesh_cylinder_wheel = meshes.add(Cylinder::new(0.35, 0.25));
+    let mesh_player_torso = meshes.add(Cuboid::new(0.55, 0.7, 0.3));
+    let mesh_player_head = meshes.add(Cuboid::new(0.32, 0.34, 0.32));
+    let mesh_player_arm = meshes.add(Cuboid::new(0.16, 0.6, 0.18));
+    let mesh_player_leg = meshes.add(Cuboid::new(0.2, 0.7, 0.22));
+    let mesh_car_body = meshes.add(Cuboid::new(2.0, 0.7, 4.2));
+    let mesh_car_cabin = meshes.add(Cuboid::new(1.7, 0.7, 2.0));
+    let mesh_car_windshield = meshes.add(Rectangle::new(1.6, 0.6));
+    let mesh_car_headlight = meshes.add(Cuboid::new(0.3, 0.15, 0.05));
+    let mesh_window = meshes.add(Rectangle::new(0.9, 1.4));
 
     // --- Materials ---
-    // (No closures — direct calls to `materials.add()` keep the borrow checker happy.)
     let lambert = |mats: &mut Assets<StandardMaterial>, color: Color| -> Handle<StandardMaterial> {
         mats.add(StandardMaterial {
             base_color: color,
@@ -155,14 +146,13 @@ pub fn setup_game_assets(
             ..default()
         })
     };
-    let emissive =
-        |mats: &mut Assets<StandardMaterial>, color: Color| -> Handle<StandardMaterial> {
-            mats.add(StandardMaterial {
-                base_color: Color::BLACK,
-                emissive: color,
-                ..default()
-            })
-        };
+    let emissive = |mats: &mut Assets<StandardMaterial>, color: Color| -> Handle<StandardMaterial> {
+        mats.add(StandardMaterial {
+            base_color: Color::BLACK,
+            emissive: color.into(),
+            ..default()
+        })
+    };
     let unlit = |mats: &mut Assets<StandardMaterial>, color: Color| -> Handle<StandardMaterial> {
         mats.add(StandardMaterial {
             base_color: color,
@@ -171,70 +161,62 @@ pub fn setup_game_assets(
         })
     };
 
-    let mat_ground = lambert(&mut materials, Color::rgb(0.29, 0.36, 0.23));
-    let mat_road = lambert(&mut materials, Color::rgb(0.13, 0.13, 0.15));
-    let mat_sidewalk = lambert(&mut materials, Color::rgb(0.53, 0.53, 0.53));
+    let mat_ground = lambert(&mut materials, Color::srgb(0.29, 0.36, 0.23));
+    let mat_road = lambert(&mut materials, Color::srgb(0.13, 0.13, 0.15));
+    let mat_sidewalk = lambert(&mut materials, Color::srgb(0.53, 0.53, 0.53));
     let mat_line_white = unlit(&mut materials, Color::WHITE);
-    let mat_line_yellow = unlit(&mut materials, Color::rgb(1.0, 1.0, 0.0));
+    let mat_line_yellow = unlit(&mut materials, Color::srgb(1.0, 1.0, 0.0));
     let mat_window_off = materials.add(StandardMaterial {
-        base_color: Color::rgb(0.13, 0.20, 0.27),
-        emissive: Color::rgb(0.05, 0.07, 0.10),
+        base_color: Color::srgb(0.13, 0.20, 0.27),
+        emissive: Color::srgb(0.05, 0.07, 0.10).into(),
         double_sided: true,
         ..default()
     });
     let mat_window_on = materials.add(StandardMaterial {
-        base_color: Color::rgb(1.0, 0.93, 0.73),
-        emissive: Color::rgb(0.7, 0.6, 0.3),
+        base_color: Color::srgb(1.0, 0.93, 0.73),
+        emissive: Color::srgb(0.7, 0.6, 0.3).into(),
         double_sided: true,
         ..default()
     });
-    let mat_roof = lambert(&mut materials, Color::rgb(0.20, 0.20, 0.20));
+    let mat_roof = lambert(&mut materials, Color::srgb(0.20, 0.20, 0.20));
     let mat_windshield = materials.add(StandardMaterial {
-        base_color: Color::rgb(0.53, 0.67, 0.80),
+        base_color: Color::srgb(0.53, 0.67, 0.80),
         metallic: 0.5,
         perceptual_roughness: 0.2,
         ..default()
     });
-    let mat_headlight = emissive(&mut materials, Color::rgb(1.0, 1.0, 0.80));
-    let mat_taillight = emissive(&mut materials, Color::rgb(1.0, 0.13, 0.13));
-    let mat_wheel = lambert(&mut materials, Color::rgb(0.07, 0.07, 0.07));
+    let mat_headlight = emissive(&mut materials, Color::srgb(1.0, 1.0, 0.80));
+    let mat_taillight = emissive(&mut materials, Color::srgb(1.0, 0.13, 0.13));
+    let mat_wheel = lambert(&mut materials, Color::srgb(0.07, 0.07, 0.07));
 
-    let mat_player_shirt = lambert(&mut materials, Color::rgb(0.16, 0.36, 1.0));
-    let mat_player_skin = lambert(&mut materials, Color::rgb(1.0, 0.80, 0.67));
-    let mat_player_pants = lambert(&mut materials, Color::rgb(0.13, 0.13, 0.13));
-    let mat_player_hair = lambert(&mut materials, Color::rgb(0.20, 0.10, 0.04));
+    let mat_player_shirt = lambert(&mut materials, Color::srgb(0.16, 0.36, 1.0));
+    let mat_player_skin = lambert(&mut materials, Color::srgb(1.0, 0.80, 0.67));
+    let mat_player_pants = lambert(&mut materials, Color::srgb(0.13, 0.13, 0.13));
+    let mat_player_hair = lambert(&mut materials, Color::srgb(0.20, 0.10, 0.04));
 
-    // Vehicle body palette (matches JS colors)
     let car_palette: [Color; 8] = [
-        Color::rgb(1.0, 0.20, 0.20),
-        Color::rgb(0.20, 0.40, 1.0),
-        Color::rgb(0.20, 0.80, 0.20),
-        Color::rgb(1.0, 0.80, 0.20),
-        Color::rgb(1.0, 1.0, 1.0),
-        Color::rgb(0.13, 0.13, 0.13),
-        Color::rgb(1.0, 0.53, 0.0),
-        Color::rgb(0.53, 0.27, 1.0),
+        Color::srgb(1.0, 0.20, 0.20),
+        Color::srgb(0.20, 0.40, 1.0),
+        Color::srgb(0.20, 0.80, 0.20),
+        Color::srgb(1.0, 0.80, 0.20),
+        Color::srgb(1.0, 1.0, 1.0),
+        Color::srgb(0.13, 0.13, 0.13),
+        Color::srgb(1.0, 0.53, 0.0),
+        Color::srgb(0.53, 0.27, 1.0),
     ];
-    let car_colors: Vec<_> = car_palette
-        .iter()
-        .map(|c| lambert(&mut materials, *c))
-        .collect();
+    let car_colors: Vec<_> = car_palette.iter().map(|c| lambert(&mut materials, *c)).collect();
 
-    // Building body palette
     let building_palette: [Color; 8] = [
-        Color::rgb(0.54, 0.54, 0.60),
-        Color::rgb(0.42, 0.42, 0.48),
-        Color::rgb(0.60, 0.55, 0.49),
-        Color::rgb(0.36, 0.43, 0.49),
-        Color::rgb(0.50, 0.55, 0.55),
-        Color::rgb(0.69, 0.63, 0.56),
-        Color::rgb(0.63, 0.35, 0.29),
-        Color::rgb(0.29, 0.41, 0.54),
+        Color::srgb(0.54, 0.54, 0.60),
+        Color::srgb(0.42, 0.42, 0.48),
+        Color::srgb(0.60, 0.55, 0.49),
+        Color::srgb(0.36, 0.43, 0.49),
+        Color::srgb(0.50, 0.55, 0.55),
+        Color::srgb(0.69, 0.63, 0.56),
+        Color::srgb(0.63, 0.35, 0.29),
+        Color::srgb(0.29, 0.41, 0.54),
     ];
-    let building_colors: Vec<_> = building_palette
-        .iter()
-        .map(|c| lambert(&mut materials, *c))
-        .collect();
+    let building_colors: Vec<_> = building_palette.iter().map(|c| lambert(&mut materials, *c)).collect();
 
     commands.insert_resource(GameAssets {
         mesh_unit_box,

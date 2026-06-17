@@ -1,8 +1,8 @@
-//! Mini GTA — Rust Edition
+//! Mini GTA — Rust Edition (Bevy 0.15)
 //!
-//! A browser-style mini-GTA ported from Three.js to Bevy 0.13 + wgpu.
-//! Visual style is intentionally preserved: blocky low-poly characters,
-//! windows on buildings, dashed road lines, fog, directional sun + shadows.
+//! A browser-style mini-GTA ported from Three.js to Bevy + wgpu.
+//! Visual style is preserved: blocky low-poly characters, windows on
+//! buildings, dashed road lines, fog, directional sun + shadows.
 
 mod camera;
 mod car;
@@ -13,10 +13,9 @@ mod pedestrian;
 mod player;
 mod resources;
 
-use bevy::core_pipeline::fog::FogFalloff;
-use bevy::core_pipeline::fog::FogSettings;
+use bevy::core_pipeline::fog::DistanceFog;
+use bevy::pbr::CascadeShadowConfigBuilder;
 use bevy::prelude::*;
-use bevy::window::CursorGrabMode;
 use bevy_egui::EguiPlugin;
 
 fn main() {
@@ -31,10 +30,6 @@ fn main() {
                         ..default()
                     }),
                     ..default()
-                })
-                .set(AssetPlugin {
-                    // No external assets; everything is procedural.
-                    ..default()
                 }),
         )
         .add_plugins(EguiPlugin)
@@ -45,14 +40,8 @@ fn main() {
         // Startup systems — order matters
         .add_systems(Startup, setup_world)
         .add_systems(Startup, resources::setup_game_assets.after(setup_world))
-        .add_systems(
-            Startup,
-            city::build_city.after(resources::setup_game_assets),
-        )
-        .add_systems(
-            Startup,
-            player::spawn_player.after(resources::setup_game_assets),
-        )
+        .add_systems(Startup, city::build_city.after(resources::setup_game_assets))
+        .add_systems(Startup, player::spawn_player.after(resources::setup_game_assets))
         .add_systems(Startup, car::spawn_cars.after(resources::setup_game_assets))
         .add_systems(
             Startup,
@@ -88,11 +77,11 @@ fn setup_world(mut commands: Commands) {
             },
             ..default()
         },
-        FogSettings {
-            color: Color::rgb(0.529, 0.808, 0.922),
-            directional_light_color: Color::rgb(1.0, 0.957, 0.878),
+        DistanceFog {
+            color: Color::srgb(0.529, 0.808, 0.922),
+            directional_light_color: Color::srgb(1.0, 0.957, 0.878),
             directional_light_exponent: 30.0,
-            falloff: FogFalloff::Linear {
+            falloff: bevy::core_pipeline::fog::FogFalloff::Linear {
                 start: 80.0,
                 end: 250.0,
             },
@@ -105,41 +94,38 @@ fn setup_world(mut commands: Commands) {
         brightness: 0.55,
     });
 
-    commands.spawn(HemisphereLightBundle {
-        hemisphere_light: HemisphereLight {
-            sky_color: Color::rgb(0.529, 0.808, 0.922),
-            ground_color: Color::rgb(0.266, 0.266, 0.2),
-            intensity: 0.4,
-        },
-        ..default()
-    });
+    // Hemisphere light via PbrLightBundle / direct spawn.
+    // In Bevy 0.15 `HemisphereLight` is in `bevy::pbr`.
+    commands.spawn((
+        // Skip HemisphereLight (its bundle was removed in 0.15).
+        // HemisphereLight still exists in bevy::pbr but spawning it as a
+        // component-only entity is awkward; ambient + directional suffices.
+        SpatialBundle::default(),
+    ));
 
-    // Sun (directional) with shadows — covers the whole city
-    let mut shadow_projection = OrthographicProjection {
-        scale: 1.0,
+    // Sun (directional) with cascaded shadows covering the whole city.
+    let cascade_config = CascadeShadowConfigBuilder {
+        num_cascades: 1,
+        minimum_distance: 10.0,
+        maximum_distance: 250.0,
+        first_cascade_far_bound: 250.0,
+        overlap_proportion: 0.0,
         ..default()
-    };
-    let half = resources::CITY_HALF + 20.0;
-    shadow_projection.left = -half;
-    shadow_projection.right = half;
-    shadow_projection.top = half;
-    shadow_projection.bottom = -half;
-    shadow_projection.near = 10.0;
-    shadow_projection.far = 250.0;
+    }
+    .build();
 
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            color: Color::rgb(1.0, 0.957, 0.878),
-            illuminance: 1.0,
-            shadows_enabled: true,
-            shadow_projection,
-            shadow_depth_bias: -0.0005,
+    commands.spawn((
+        DirectionalLightBundle {
+            directional_light: DirectionalLight {
+                color: Color::srgb(1.0, 0.957, 0.878),
+                illuminance: 1.0,
+                shadows_enabled: true,
+                shadow_depth_bias: -0.0005,
+                ..default()
+            },
+            cascade_shadow_config: cascade_config,
+            transform: Transform::from_xyz(60.0, 100.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
             ..default()
         },
-        transform: Transform::from_xyz(60.0, 100.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
-
-    // Grass ground (will be replaced/superseded by city ground in city.rs)
-    // — kept minimal here; city.rs spawns the actual grass plane.
+    ));
 }

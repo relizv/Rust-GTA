@@ -1,11 +1,13 @@
 //! Player: spawn, movement, limb animation, enter/exit vehicles, punch.
 
+use bevy::input::ButtonInput;
 use bevy::prelude::*;
+use bevy::input::mouse::MouseButton;
 use std::f32::consts::PI;
 
+use crate::resources::{GameAssets, GameState, InputState, KeysPressed, CITY_HALF, ROAD_W};
 use crate::car::Car;
 use crate::pedestrian::Pedestrian;
-use crate::resources::{GameAssets, GameState, InputState, KeysPressed, CITY_HALF, ROAD_W};
 
 #[derive(Component)]
 pub struct Player;
@@ -26,7 +28,6 @@ pub struct PlayerLimbs {
 }
 
 pub fn spawn_player(mut commands: Commands, assets: Res<GameAssets>) {
-    // Spawn limb children first, capture their entity IDs.
     let arm_l = commands
         .spawn(PbrBundle {
             mesh: assets.mesh_player_arm.clone(),
@@ -84,7 +85,6 @@ pub fn spawn_player(mut commands: Commands, assets: Res<GameAssets>) {
         })
         .id();
 
-    // Spawn the root entity.
     let player_root = commands
         .spawn((
             SpatialBundle {
@@ -98,16 +98,10 @@ pub fn spawn_player(mut commands: Commands, assets: Res<GameAssets>) {
                 yaw: 0.0,
                 on_ground: true,
             },
-            PlayerLimbs {
-                arm_l,
-                arm_r,
-                leg_l,
-                leg_r,
-            },
+            PlayerLimbs { arm_l, arm_r, leg_l, leg_r },
         ))
         .id();
 
-    // Parent all children onto the root.
     commands
         .entity(player_root)
         .push_children(&[torso, head, hair, arm_l, arm_r, leg_l, leg_r]);
@@ -120,14 +114,9 @@ pub fn update_player(
     keys: Res<KeysPressed>,
     input_state: Res<InputState>,
     mut game_state: ResMut<GameState>,
-    mouse_buttons: Res<Input<bevy::input::mouse::MouseButton>>,
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
     mut player_q: Query<
-        (
-            &mut PlayerState,
-            &mut Transform,
-            &PlayerLimbs,
-            &mut Visibility,
-        ),
+        (&mut PlayerState, &mut Transform, &PlayerLimbs, &mut Visibility),
         With<Player>,
     >,
     mut limb_q: Query<&mut Transform, Without<Player>>,
@@ -142,7 +131,6 @@ pub fn update_player(
     // --- Edge-triggered actions ---
     if keys.f_pressed {
         if game_state.in_vehicle.is_some() {
-            // exit
             if let Some(car_entity) = game_state.in_vehicle.take() {
                 if let Ok((_, _, car_transform)) = cars.get(car_entity) {
                     let right =
@@ -155,7 +143,6 @@ pub fn update_player(
                 game_state.show_toast("Вы вышли из машины");
             }
         } else {
-            // try to enter nearest car within 4.0m
             let player_pos = transform.translation;
             let mut nearest: Option<(Entity, f32)> = None;
             for (e, _, t) in cars.iter() {
@@ -186,7 +173,7 @@ pub fn update_player(
     }
 
     // LMB = punch (only when on foot)
-    if mouse_buttons.just_pressed(bevy::input::mouse::MouseButton::Left)
+    if mouse_buttons.just_pressed(MouseButton::Left)
         && game_state.in_vehicle.is_none()
     {
         do_punch(&transform, &state, &mut peds, &mut game_state);
@@ -194,8 +181,6 @@ pub fn update_player(
 
     // --- Movement ---
     if let Some(car_entity) = game_state.in_vehicle {
-        // Player rides along — copy car transform onto player position so the
-        // camera system can follow the car via the player's transform.
         if let Ok((_, _, car_transform)) = cars.get(car_entity) {
             transform.translation = car_transform.translation;
             state.yaw = car_transform.rotation.y;
@@ -208,18 +193,10 @@ pub fn update_player(
     let right = Vec3::new(yaw.cos(), 0.0, -yaw.sin());
 
     let mut move_vec = Vec3::ZERO;
-    if keys.w {
-        move_vec += forward;
-    }
-    if keys.s {
-        move_vec -= forward;
-    }
-    if keys.d {
-        move_vec += right;
-    }
-    if keys.a {
-        move_vec -= right;
-    }
+    if keys.w { move_vec += forward; }
+    if keys.s { move_vec -= forward; }
+    if keys.d { move_vec += right; }
+    if keys.a { move_vec -= right; }
 
     let speed = if keys.shift { 9.0 } else { 4.5 };
 
@@ -234,7 +211,6 @@ pub fn update_player(
         state.vel.z *= 0.8;
     }
 
-    // Jump + gravity
     if keys.space && state.on_ground {
         state.vel.y = 7.5;
         state.on_ground = false;
@@ -248,15 +224,12 @@ pub fn update_player(
         state.on_ground = true;
     }
 
-    // Building collision
     collide_buildings(&mut transform.translation, 0.6, &buildings);
 
-    // Clamp to city bounds
     let lim = CITY_HALF + 10.0;
     transform.translation.x = transform.translation.x.clamp(-lim, lim);
     transform.translation.z = transform.translation.z.clamp(-lim, lim);
 
-    // Apply facing yaw
     transform.rotation = Quat::from_rotation_y(state.yaw);
 
     // --- Animate limbs ---
@@ -297,7 +270,8 @@ fn do_punch(
     let mut hit_count = 0;
     for (_, mut ped_t, _) in peds.iter_mut() {
         if ped_t.translation.distance(hit_pos) < 1.4 {
-            let knock = (ped_t.translation - hit_pos).normalize_or_zero() * 2.5;
+            let mut knock = (ped_t.translation - hit_pos).normalize_or_zero() * 2.5;
+            knock.y = 0.0;
             ped_t.translation.x += knock.x;
             ped_t.translation.z += knock.z;
             hit_count += 1;
@@ -325,7 +299,6 @@ pub fn update_wanted_decay(time: Res<Time>, mut game_state: ResMut<GameState>) {
     }
 }
 
-// ----- helpers -----
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
@@ -341,7 +314,11 @@ fn lerp_angle(a: f32, b: f32, t: f32) -> f32 {
     a + diff * t
 }
 
-fn collide_buildings(pos: &mut Vec3, radius: f32, buildings: &Query<&crate::city::Building>) {
+fn collide_buildings(
+    pos: &mut Vec3,
+    radius: f32,
+    buildings: &Query<&crate::city::Building>,
+) {
     for b in buildings.iter() {
         let dx = (pos.x - b.cx).abs();
         let dz = (pos.z - b.cz).abs();

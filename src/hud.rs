@@ -5,18 +5,19 @@
 //! - Bottom-left: minimap (drawn with egui::Painter)
 //! - Bottom-right: speedometer (only when driving)
 //! - Center-top: toast notification
-//! - Center:    start overlay (when not started)
+//! - Center:    start overlay (when not started) + pause overlay (cursor unlocked)
 
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContext};
+use bevy::window::CursorGrabMode;
+use bevy_egui::{egui, EguiContexts};
 
+use crate::player::Player;
 use crate::car::Car;
 use crate::pedestrian::Pedestrian;
-use crate::player::Player;
 use crate::resources::{GameState, InputState, CITY_HALF, GRID, STEP};
 
 pub fn update_hud(
-    mut egui_ctx: ResMut<EguiContext>,
+    mut contexts: EguiContexts,
     mut game_state: ResMut<GameState>,
     mut input_state: ResMut<InputState>,
     mut windows: Query<&mut Window>,
@@ -24,11 +25,13 @@ pub fn update_hud(
     cars: Query<&Transform, With<Car>>,
     peds: Query<&Transform, With<Pedestrian>>,
 ) {
+    let ctx = contexts.ctx_mut();
+
     // ----- Start overlay -----
     if !game_state.started {
         egui::CentralPanel::default()
             .frame(egui::Frame::none().fill(egui::Color32::from_rgb(10, 10, 30)))
-            .show(egui_ctx.ctx_mut(), |ui| {
+            .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.add_space(120.0);
                     ui.heading(
@@ -50,12 +53,11 @@ pub fn update_hud(
                             .size(20.0)
                             .strong(),
                     ).clicked() {
-                        // Start the game and lock the cursor.
                         game_state.started = true;
                         if let Ok(mut window) = windows.get_single_mut() {
                             input_state.cursor_locked = true;
                             window.cursor.visible = false;
-                            window.cursor.grab_mode = bevy::window::CursorGrabMode::Locked;
+                            window.cursor.grab_mode = CursorGrabMode::Locked;
                         }
                     }
                     ui.add_space(36.0);
@@ -75,48 +77,23 @@ pub fn update_hud(
     // ----- Info (top-left) -----
     egui::Area::new(egui::Id::new("info"))
         .anchor(egui::Align2::LEFT_TOP, egui::vec2(14.0, 14.0))
-        .show(egui_ctx.ctx_mut(), |ui| {
+        .show(ctx, |ui| {
             egui::Frame::popup(ui.style())
                 .fill(egui::Color32::from_black_alpha(140))
                 .show(ui, |ui| {
                     ui.set_min_width(180.0);
                     ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new("Здоровье")
-                                .color(egui::Color32::from_rgb(170, 170, 187)),
-                        );
-                        ui.label(
-                            egui::RichText::new(format!("{}", game_state.hp as i32))
-                                .color(egui::Color32::WHITE)
-                                .strong(),
-                        );
+                        ui.label(egui::RichText::new("Здоровье").color(egui::Color32::from_rgb(170, 170, 187)));
+                        ui.label(egui::RichText::new(format!("{}", game_state.hp as i32)).color(egui::Color32::WHITE).strong());
                     });
                     ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new("Деньги")
-                                .color(egui::Color32::from_rgb(170, 170, 187)),
-                        );
-                        ui.label(
-                            egui::RichText::new(format!("${}", game_state.cash))
-                                .color(egui::Color32::WHITE)
-                                .strong(),
-                        );
+                        ui.label(egui::RichText::new("Деньги").color(egui::Color32::from_rgb(170, 170, 187)));
+                        ui.label(egui::RichText::new(format!("${}", game_state.cash)).color(egui::Color32::WHITE).strong());
                     });
                     ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new("Режим")
-                                .color(egui::Color32::from_rgb(170, 170, 187)),
-                        );
-                        let mode = if game_state.in_vehicle.is_some() {
-                            "ЗА РУЛЁМ"
-                        } else {
-                            "ПЕШКОМ"
-                        };
-                        ui.label(
-                            egui::RichText::new(mode)
-                                .color(egui::Color32::from_rgb(255, 204, 51))
-                                .strong(),
-                        );
+                        ui.label(egui::RichText::new("Режим").color(egui::Color32::from_rgb(170, 170, 187)));
+                        let mode = if game_state.in_vehicle.is_some() { "ЗА РУЛЁМ" } else { "ПЕШКОМ" };
+                        ui.label(egui::RichText::new(mode).color(egui::Color32::from_rgb(255, 204, 51)).strong());
                     });
                 });
         });
@@ -125,7 +102,7 @@ pub fn update_hud(
     if game_state.wanted > 0 {
         egui::Area::new(egui::Id::new("wanted"))
             .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-18.0, 18.0))
-            .show(egui_ctx.ctx_mut(), |ui| {
+            .show(ctx, |ui| {
                 let stars: String = "★".repeat(game_state.wanted as usize)
                     + &"☆".repeat(5 - game_state.wanted as usize);
                 ui.label(
@@ -147,24 +124,16 @@ pub fn update_hud(
             .map(|t| t.rotation.to_euler(EulerRot::YXZ).0)
             .unwrap_or(0.0)
     } else {
-        // For pedestrians, use camera yaw so the map rotates with the view.
         input_state.yaw
     };
 
     egui::Area::new(egui::Id::new("minimap"))
         .anchor(egui::Align2::LEFT_BOTTOM, egui::vec2(18.0, -18.0))
-        .show(egui_ctx.ctx_mut(), |ui| {
+        .show(ctx, |ui| {
             let size = 190.0;
-            let (rect, _resp) =
-                ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
+            let (rect, _resp) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
             let painter = ui.painter().with_clip_rect(rect);
-            // Background circle
-            painter.circle_filled(
-                rect.center(),
-                size / 2.0,
-                egui::Color32::from_rgb(26, 42, 26),
-            );
-            // Rotate so player faces up
+            painter.circle_filled(rect.center(), size / 2.0, egui::Color32::from_rgb(26, 42, 26));
             let center = rect.center();
             let rot = -yaw + std::f32::consts::PI;
             let scale = 0.32;
@@ -172,17 +141,16 @@ pub fn update_hud(
             // Roads
             for i in 0..=GRID {
                 let c = -CITY_HALF + i as f32 * STEP;
-                // Project road endpoints into minimap space (relative to player),
-                // then rotate by `rot` so the player faces up.
-                let (rx, ry) = ((c - player_pos.x) * scale, (c - player_pos.z) * scale);
-                // Horizontal road (z=c): line spans X, fixed Y = ry
+                let (rx, ry) = (
+                    (c - player_pos.x) * scale,
+                    (c - player_pos.z) * scale,
+                );
                 let p1 = rotate2d(-CITY_HALF * scale, ry, rot);
                 let p2 = rotate2d(CITY_HALF * scale, ry, rot);
                 painter.line_segment(
                     [center + p1, center + p2],
                     egui::Stroke::new(4.0, egui::Color32::from_rgb(68, 68, 68)),
                 );
-                // Vertical road (x=c): line spans Y, fixed X = rx
                 let p1 = rotate2d(rx, -CITY_HALF * scale, rot);
                 let p2 = rotate2d(rx, CITY_HALF * scale, rot);
                 painter.line_segment(
@@ -207,7 +175,7 @@ pub fn update_hud(
                 painter.circle_filled(center + p, 1.4, egui::Color32::WHITE);
             }
 
-            // Player arrow (always at center, pointing up)
+            // Player arrow
             let arrow = vec![
                 center + egui::vec2(0.0, -6.0),
                 center + egui::vec2(-4.0, 4.0),
@@ -224,20 +192,17 @@ pub fn update_hud(
     if game_state.in_vehicle.is_some() {
         egui::Area::new(egui::Id::new("speedo"))
             .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-20.0, -20.0))
-            .show(egui_ctx.ctx_mut(), |ui| {
+            .show(ctx, |ui| {
                 egui::Frame::popup(ui.style())
                     .fill(egui::Color32::from_black_alpha(153))
                     .show(ui, |ui| {
                         ui.set_min_width(150.0);
                         ui.vertical_centered(|ui| {
                             ui.label(
-                                egui::RichText::new(format!(
-                                    "{}",
-                                    game_state.last_speed_kmh as i32
-                                ))
-                                .color(egui::Color32::from_rgb(255, 204, 51))
-                                .size(34.0)
-                                .strong(),
+                                egui::RichText::new(format!("{}", game_state.last_speed_kmh as i32))
+                                    .color(egui::Color32::from_rgb(255, 204, 51))
+                                    .size(34.0)
+                                    .strong(),
                             );
                             ui.label(
                                 egui::RichText::new("КМ/Ч")
@@ -258,13 +223,10 @@ pub fn update_hud(
     if let Some((msg, _)) = &game_state.toast {
         egui::Area::new(egui::Id::new("toast"))
             .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 24.0))
-            .show(egui_ctx.ctx_mut(), |ui| {
+            .show(ctx, |ui| {
                 egui::Frame::popup(ui.style())
                     .fill(egui::Color32::from_black_alpha(217))
-                    .stroke(egui::Stroke::new(
-                        1.0,
-                        egui::Color32::from_rgb(255, 204, 51),
-                    ))
+                    .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 204, 51)))
                     .show(ui, |ui| {
                         ui.label(
                             egui::RichText::new(msg)
@@ -280,7 +242,7 @@ pub fn update_hud(
     if game_state.started && !input_state.cursor_locked {
         egui::CentralPanel::default()
             .frame(egui::Frame::none().fill(egui::Color32::from_black_alpha(180)))
-            .show(egui_ctx.ctx_mut(), |ui| {
+            .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.add_space(200.0);
                     ui.heading(
