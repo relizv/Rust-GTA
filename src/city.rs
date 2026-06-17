@@ -1,6 +1,5 @@
 //! City generation: ground, roads, dashed lane lines, sidewalks, buildings.
 
-use bevy::math::{Cuboid, Plane3d, Rectangle};
 use bevy::prelude::*;
 use rand::Rng;
 
@@ -110,7 +109,7 @@ pub fn build_city(
                     let color_idx = rng.gen_range(0..assets.mat_building_colors.len());
                     spawn_building(
                         &mut commands,
-                        assets,
+                        &assets,
                         &mut meshes,
                         bcx,
                         bcz,
