@@ -8,7 +8,7 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::resources::{GameAssets, GRID, STEP, BLOCK, ROAD_W, SIDEWALK_W, CITY_HALF};
+use crate::resources::{GameAssets, BLOCK, CITY_HALF, GRID, ROAD_W, SIDEWALK_W, STEP};
 
 #[derive(Component)]
 pub struct Building {
@@ -177,7 +177,11 @@ fn spawn_building<R: Rng>(
         for c in 0..cols_x {
             let x = -w / 2.0 + (c as f32 + 0.5) * (w / cols_x as f32);
             let on = rng.gen_bool(0.35);
-            let mat = if on { assets.mat_window_on.clone() } else { assets.mat_window_off.clone() };
+            let mat = if on {
+                assets.mat_window_on.clone()
+            } else {
+                assets.mat_window_off.clone()
+            };
 
             // +Z face: no rotation (Quad is in XY by default, normal +Z)
             commands.spawn(PbrBundle {
@@ -200,7 +204,11 @@ fn spawn_building<R: Rng>(
         for c in 0..cols_z {
             let z = -d / 2.0 + (c as f32 + 0.5) * (d / cols_z as f32);
             let on = rng.gen_bool(0.35);
-            let mat = if on { assets.mat_window_on.clone() } else { assets.mat_window_off.clone() };
+            let mat = if on {
+                assets.mat_window_on.clone()
+            } else {
+                assets.mat_window_off.clone()
+            };
 
             // +X face: rotate +90° around Y so normal faces +X
             commands.spawn(PbrBundle {
