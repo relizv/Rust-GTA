@@ -8,6 +8,7 @@
 //! - Center:    start overlay (when not started) + pause overlay (cursor unlocked)
 
 use bevy::prelude::*;
+use bevy::transform::components::GlobalTransform;
 use bevy::window::CursorGrabMode;
 use bevy_egui::{egui, EguiContexts};
 
@@ -21,9 +22,11 @@ pub fn update_hud(
     mut game_state: ResMut<GameState>,
     mut input_state: ResMut<InputState>,
     mut windows: Query<&mut Window>,
-    player_q: Query<&Transform, With<Player>>,
-    cars: Query<&Transform, With<Car>>,
-    peds: Query<&Transform, With<Pedestrian>>,
+    // Read positions via GlobalTransform to avoid B0001 conflicts with the
+    // movement systems that hold `&mut Transform` on the same entities.
+    player_q: Query<&GlobalTransform, With<Player>>,
+    cars: Query<&GlobalTransform, With<Car>>,
+    peds: Query<&GlobalTransform, With<Pedestrian>>,
 ) {
     let ctx = contexts.ctx_mut();
 
@@ -142,11 +145,11 @@ pub fn update_hud(
     // ----- Minimap (bottom-left) -----
     let player_pos = player_q
         .get_single()
-        .map(|t| t.translation)
+        .map(|gt| gt.translation())
         .unwrap_or(Vec3::ZERO);
     let yaw = if let Some(car_entity) = game_state.in_vehicle {
         cars.get(car_entity)
-            .map(|t| t.rotation.to_euler(EulerRot::YXZ).0)
+            .map(|gt| gt.rotation().to_euler(EulerRot::YXZ).0)
             .unwrap_or(0.0)
     } else {
         input_state.yaw
@@ -187,17 +190,19 @@ pub fn update_hud(
             }
 
             // Cars (yellow dots)
-            for car_t in cars.iter() {
-                let rx = (car_t.translation.x - player_pos.x) * scale;
-                let ry = (car_t.translation.z - player_pos.z) * scale;
+            for car_gt in cars.iter() {
+                let cp = car_gt.translation();
+                let rx = (cp.x - player_pos.x) * scale;
+                let ry = (cp.z - player_pos.z) * scale;
                 let p = rotate2d(rx, ry, rot);
                 painter.circle_filled(center + p, 2.2, egui::Color32::from_rgb(255, 255, 80));
             }
 
             // Peds (white dots)
-            for ped_t in peds.iter() {
-                let rx = (ped_t.translation.x - player_pos.x) * scale;
-                let ry = (ped_t.translation.z - player_pos.z) * scale;
+            for ped_gt in peds.iter() {
+                let pp = ped_gt.translation();
+                let rx = (pp.x - player_pos.x) * scale;
+                let ry = (pp.z - player_pos.z) * scale;
                 let p = rotate2d(rx, ry, rot);
                 painter.circle_filled(center + p, 1.4, egui::Color32::WHITE);
             }

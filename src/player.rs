@@ -3,6 +3,7 @@
 use bevy::input::mouse::MouseButton;
 use bevy::input::ButtonInput;
 use bevy::prelude::*;
+use bevy::transform::components::GlobalTransform;
 use std::f32::consts::PI;
 
 use crate::car::Car;
@@ -11,6 +12,15 @@ use crate::resources::{GameAssets, GameState, InputState, KeysPressed, CITY_HALF
 
 #[derive(Component)]
 pub struct Player;
+
+/// Marker component attached to each player limb entity so that
+/// `update_player`'s `&mut Transform` access on limbs is disjoint (at the
+/// archetype level) from `update_peds`'s `&mut Transform` access on ped limbs.
+/// Without this, Bevy 0.15 panics with B0001 because both queries are filtered
+/// only by `Without<Player>` / `Without<Pedestrian>` and would overlap on any
+/// Transform entity that has neither marker.
+#[derive(Component)]
+pub struct PlayerLimb;
 
 #[derive(Component)]
 pub struct PlayerState {
@@ -33,6 +43,7 @@ pub fn spawn_player(mut commands: Commands, assets: Res<GameAssets>) {
             Mesh3d(assets.mesh_player_arm.clone()),
             MeshMaterial3d(assets.mat_player_shirt.clone()),
             Transform::from_xyz(-0.36, 1.05, 0.0),
+            PlayerLimb,
         ))
         .id();
     let arm_r = commands
@@ -40,6 +51,7 @@ pub fn spawn_player(mut commands: Commands, assets: Res<GameAssets>) {
             Mesh3d(assets.mesh_player_arm.clone()),
             MeshMaterial3d(assets.mat_player_shirt.clone()),
             Transform::from_xyz(0.36, 1.05, 0.0),
+            PlayerLimb,
         ))
         .id();
     let leg_l = commands
@@ -47,6 +59,7 @@ pub fn spawn_player(mut commands: Commands, assets: Res<GameAssets>) {
             Mesh3d(assets.mesh_player_leg.clone()),
             MeshMaterial3d(assets.mat_player_pants.clone()),
             Transform::from_xyz(-0.14, 0.35, 0.0),
+            PlayerLimb,
         ))
         .id();
     let leg_r = commands
@@ -54,6 +67,7 @@ pub fn spawn_player(mut commands: Commands, assets: Res<GameAssets>) {
             Mesh3d(assets.mesh_player_leg.clone()),
             MeshMaterial3d(assets.mat_player_pants.clone()),
             Transform::from_xyz(0.14, 0.35, 0.0),
+            PlayerLimb,
         ))
         .id();
     let torso = commands
@@ -109,7 +123,6 @@ pub fn update_player(
     keys: Res<KeysPressed>,
     input_state: Res<InputState>,
     mut game_state: ResMut<GameState>,
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
     mut player_q: Query<
         (
             &mut PlayerState,
@@ -117,11 +130,16 @@ pub fn update_player(
             &PlayerLimbs,
             &mut Visibility,
         ),
-        With<Player>,
+        (With<Player>, Without<PlayerLimb>),
     >,
-    mut limb_q: Query<&mut Transform, Without<Player>>,
-    cars: Query<(Entity, &Car, &Transform), Without<Player>>,
-    mut peds: Query<(Entity, &mut Transform, &mut Pedestrian), Without<Player>>,
+    mut limb_q: Query<&mut Transform, With<PlayerLimb>>,
+    // Read car positions via `GlobalTransform` (not `Transform`) so that this
+    // system's read does not conflict with `update_ai_cars`'s `&mut Transform`
+    // write on the same components — Bevy 0.15 panics with B0001 otherwise.
+    // `GlobalTransform` is a separate component, so the scheduler is happy.
+    // GlobalTransform is propagated at end of frame, so we see last frame's
+    // car pose — fine for player-vs-car proximity checks at 60 FPS.
+    cars: Query<(Entity, &Car, &GlobalTransform), Without<Player>>,
     buildings: Query<&crate::city::Building>,
 ) {
     let Ok((mut state, mut transform, limbs, mut vis)) = player_q.get_single_mut() else {
@@ -132,10 +150,14 @@ pub fn update_player(
     if keys.f_pressed {
         if game_state.in_vehicle.is_some() {
             if let Some(car_entity) = game_state.in_vehicle.take() {
-                if let Ok((_, _, car_transform)) = cars.get(car_entity) {
-                    let right =
-                        Quat::from_rotation_y(car_transform.rotation.y) * Vec3::new(1.0, 0.0, 0.0);
-                    let exit = car_transform.translation + right * 2.0;
+                if let Ok((_, _, car_gt)) = cars.get(car_entity) {
+                    // Use the GlobalTransform's rotation/translation.
+                    let car_pos = car_gt.translation();
+                    let car_rot = car_gt.rotation();
+                    // Yaw angle (Euler Y) from the world-space rotation.
+                    let (yaw, _, _) = car_rot.to_euler(EulerRot::YXZ);
+                    let right = Quat::from_rotation_y(yaw) * Vec3::new(1.0, 0.0, 0.0);
+                    let exit = car_pos + right * 2.0;
                     state.vel = Vec3::ZERO;
                     transform.translation = Vec3::new(exit.x, 0.0, exit.z);
                 }
@@ -145,8 +167,8 @@ pub fn update_player(
         } else {
             let player_pos = transform.translation;
             let mut nearest: Option<(Entity, f32)> = None;
-            for (e, _, t) in cars.iter() {
-                let d = t.translation.distance(player_pos);
+            for (e, _, gt) in cars.iter() {
+                let d = gt.translation().distance(player_pos);
                 if d < 4.0 && (nearest.is_none() || d < nearest.unwrap().1) {
                     nearest = Some((e, d));
                 }
@@ -172,16 +194,16 @@ pub fn update_player(
         game_state.show_toast("Позиция сброшена");
     }
 
-    // LMB = punch (only when on foot)
-    if mouse_buttons.just_pressed(MouseButton::Left) && game_state.in_vehicle.is_none() {
-        do_punch(&transform, &state, &mut peds, &mut game_state);
-    }
+    // NOTE: punch handling was moved into the separate `player_punch` system
+    // to avoid the B0001 conflict with `update_peds` (both wrote `&mut
+    // Transform` on ped entities).
 
     // --- Movement ---
     if let Some(car_entity) = game_state.in_vehicle {
-        if let Ok((_, _, car_transform)) = cars.get(car_entity) {
-            transform.translation = car_transform.translation;
-            state.yaw = car_transform.rotation.y;
+        if let Ok((_, _, car_gt)) = cars.get(car_entity) {
+            transform.translation = car_gt.translation();
+            let (yaw, _, _) = car_gt.rotation().to_euler(EulerRot::YXZ);
+            state.yaw = yaw;
         }
         return;
     }
@@ -248,7 +270,7 @@ pub fn update_player(
 }
 
 fn animate_limb(
-    q: &mut Query<&mut Transform, Without<Player>>,
+    q: &mut Query<&mut Transform, With<PlayerLimb>>,
     entity: Entity,
     speed: f32,
     t: f32,
@@ -265,21 +287,41 @@ fn animate_limb(
     }
 }
 
-fn do_punch(
-    transform: &Transform,
-    state: &PlayerState,
-    peds: &mut Query<(Entity, &mut Transform, &mut Pedestrian), Without<Player>>,
-    game_state: &mut GameState,
+/// Handle the LMB punch action as a separate system so that its `&mut Transform`
+/// access on ped entities does not conflict with `update_peds` (Bevy 0.15 B0001).
+/// Must run AFTER `update_peds` so that the punch knockback is applied on top of
+/// the ped's sidewalk movement this frame.
+pub fn player_punch(
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
+    // Use GlobalTransform for the player position to avoid B0001 with
+    // `update_player`'s `&mut Transform` write on the player.
+    player_q: Query<(&GlobalTransform, &PlayerState), With<Player>>,
+    // We only write to `Pedestrian.knockback` (a Vec3 field), not to Transform,
+    // so there is no B0001 with `update_peds`'s `&mut Transform` access.
+    mut peds: Query<&mut Pedestrian, Without<Player>>,
+    // Single mutable access to GameState: it is also readable through this
+    // borrow, so we don't need a separate `Res<GameState>` (that caused B0002).
+    mut game_state: ResMut<GameState>,
 ) {
+    if !mouse_buttons.just_pressed(MouseButton::Left) || game_state.in_vehicle.is_some() {
+        return;
+    }
+    let Ok((player_gt, state)) = player_q.get_single() else {
+        return;
+    };
+    let player_pos = player_gt.translation();
     let forward = Vec3::new(state.yaw.sin(), 0.0, state.yaw.cos());
-    let hit_pos = transform.translation + forward * 1.2;
+    let hit_pos = player_pos + forward * 1.2;
     let mut hit_count = 0;
-    for (_, mut ped_t, _) in peds.iter_mut() {
-        if ped_t.translation.distance(hit_pos) < 1.4 {
-            let mut knock = (ped_t.translation - hit_pos).normalize_or_zero() * 2.5;
+    for mut ped in peds.iter_mut() {
+        // Use ped.knockback as a temp position proxy: we need to know the ped's
+        // current position to test distance, but we cannot read Transform here.
+        // Workaround: store the last known position in Pedestrian each frame
+        // (see `update_peds` where we sync `ped.pos = transform.translation`).
+        if ped.pos.distance(hit_pos) < 1.4 {
+            let mut knock = (ped.pos - hit_pos).normalize_or_zero() * 2.5;
             knock.y = 0.0;
-            ped_t.translation.x += knock.x;
-            ped_t.translation.z += knock.z;
+            ped.knockback += knock;
             hit_count += 1;
         }
     }
