@@ -1,6 +1,7 @@
 //! Third-person follow camera. Lags smoothly toward the desired position.
 
 use bevy::prelude::*;
+use bevy::transform::components::GlobalTransform;
 
 use crate::car::Car;
 use crate::player::Player;
@@ -10,8 +11,11 @@ pub fn update_camera(
     time: Res<Time>,
     input_state: Res<InputState>,
     game_state: Res<GameState>,
-    player_q: Query<&Transform, With<Player>>,
-    cars: Query<&Transform, With<Car>>,
+    // Use GlobalTransform (not Transform) so this read does not conflict with
+    // `update_player`'s `&mut Transform` write on the player — Bevy 0.15 would
+    // otherwise panic with B0001 even though both systems are in `.chain()`.
+    player_q: Query<&GlobalTransform, With<Player>>,
+    cars: Query<&GlobalTransform, With<Car>>,
     mut camera_q: Query<&mut Transform, With<Camera>>,
 ) {
     let Ok(player_t) = player_q.get_single() else {
@@ -21,17 +25,20 @@ pub fn update_camera(
         return;
     };
 
+    let player_pos = player_t.translation();
     let (target, yaw, pitch, dist) = if let Some(car_entity) = game_state.in_vehicle {
-        let car_t = cars.get(car_entity).copied().unwrap_or(*player_t);
-        let car_yaw = car_t.rotation.to_euler(EulerRot::YXZ).0 + std::f32::consts::PI;
-        (car_t.translation, car_yaw, 0.35, 9.0)
+        let car_pos = cars
+            .get(car_entity)
+            .map(|gt| gt.translation())
+            .unwrap_or(player_pos);
+        let car_yaw = cars
+            .get(car_entity)
+            .map(|gt| gt.rotation().to_euler(EulerRot::YXZ).0)
+            .unwrap_or(0.0)
+            + std::f32::consts::PI;
+        (car_pos, car_yaw, 0.35, 9.0)
     } else {
-        (
-            player_t.translation,
-            input_state.yaw,
-            input_state.pitch,
-            7.0,
-        )
+        (player_pos, input_state.yaw, input_state.pitch, 7.0)
     };
 
     let offset = Vec3::new(

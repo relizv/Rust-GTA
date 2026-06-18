@@ -153,14 +153,17 @@ pub fn update_ai_cars(
     mut game_state: ResMut<GameState>,
     mut cars: Query<(Entity, &mut Car, &mut Transform, &mut CarWheels)>,
     mut wheel_transforms: Query<&mut Transform, Without<Car>>,
-    player_q: Query<&Transform, With<crate::player::Player>>,
+    // Use GlobalTransform (not Transform) for the player so this read does not
+    // conflict with `update_player`'s `&mut Transform` write on the player —
+    // Bevy 0.15 would otherwise panic with B0001.
+    player_q: Query<&GlobalTransform, With<crate::player::Player>>,
     buildings: Query<&Building>,
 ) {
     let mut rng = rand::thread_rng();
     let dt = time.delta_secs();
     let player_pos = player_q
         .get_single()
-        .map(|t| t.translation)
+        .map(|gt| gt.translation())
         .unwrap_or(Vec3::ZERO);
 
     for (entity, mut car, mut transform, mut wheels) in cars.iter_mut() {

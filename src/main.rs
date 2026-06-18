@@ -58,6 +58,12 @@ fn main() {
                 player::update_player,
                 car::update_ai_cars,
                 pedestrian::update_peds,
+                // `player_punch` runs after `update_peds` so that it can read
+                // `ped.pos` (synced at the end of `update_peds`) and queue
+                // knockback into `ped.knockback`, which `update_peds` will
+                // apply on the next frame. This ordering avoids Bevy 0.15's
+                // B0001 panic on conflicting `&mut Transform` accesses.
+                player::player_punch,
                 camera::update_camera,
                 player::update_wanted_decay,
                 hud::update_hud,

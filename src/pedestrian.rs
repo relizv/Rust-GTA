@@ -1,6 +1,7 @@
 //! Pedestrians: spawn, AI walking along sidewalks, limb animation.
 
 use bevy::prelude::*;
+use bevy::transform::components::GlobalTransform;
 use rand::Rng;
 use std::f32::consts::PI;
 
@@ -12,6 +13,13 @@ pub struct Pedestrian {
     pub speed: f32,
     pub phase: f32,
     pub change_in: f32,
+    /// Last-frame world position, synced at the end of `update_peds`. Used by
+    /// `player_punch` (which cannot read `Transform` due to B0001 conflict)
+    /// to test punch hit distance.
+    pub pos: Vec3,
+    /// Accumulated knockback impulse to apply on the next `update_peds` tick.
+    /// Written by `player_punch`, consumed and zeroed by `update_peds`.
+    pub knockback: Vec3,
 }
 
 #[derive(Component)]
@@ -98,6 +106,8 @@ pub fn spawn_peds(mut commands: Commands, assets: Res<GameAssets>) {
                     speed: 1.0 + rng.gen::<f32>() * 0.7,
                     phase: rng.gen::<f32>() * 2.0 * PI,
                     change_in: 2.0 + rng.gen::<f32>() * 5.0,
+                    pos,
+                    knockback: Vec3::ZERO,
                 },
                 PedLimbs {
                     arm_l,
@@ -119,12 +129,14 @@ pub fn update_peds(
     game_state: Res<GameState>,
     mut peds: Query<(&mut Pedestrian, &mut Transform, &PedLimbs), Without<Player>>,
     mut limb_q: Query<&mut Transform, (Without<Player>, Without<Pedestrian>)>,
-    player_q: Query<&Transform, With<Player>>,
+    // Read player position via GlobalTransform to avoid B0001 conflict with
+    // `update_player`'s `&mut Transform` write on the player.
+    player_q: Query<&GlobalTransform, With<Player>>,
 ) {
     let dt = time.delta_secs();
     let player_pos = player_q
         .get_single()
-        .map(|t| t.translation)
+        .map(|gt| gt.translation())
         .unwrap_or(Vec3::ZERO);
 
     for (mut ped, mut transform, limbs) in peds.iter_mut() {
@@ -138,6 +150,9 @@ pub fn update_peds(
 
         let fwd = transform.rotation * Vec3::new(0.0, 0.0, 1.0);
         transform.translation += fwd * ped.speed * dt;
+        // Apply punch knockback (written by `player_punch` system).
+        transform.translation += ped.knockback;
+        ped.knockback = Vec3::ZERO;
         transform.translation.y = 0.3;
 
         pull_to_sidewalk(&mut transform.translation);
@@ -172,6 +187,10 @@ pub fn update_peds(
         if let Ok(mut t) = limb_q.get_mut(limbs.arm_r) {
             t.rotation = Quat::from_rotation_x(arm_r_swing);
         }
+
+        // Sync `ped.pos` so `player_punch` (which cannot read Transform) can
+        // test punch distance using this cached value.
+        ped.pos = transform.translation;
     }
 }
 
