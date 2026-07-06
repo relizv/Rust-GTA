@@ -106,4 +106,4 @@ This codebase targets Bevy 0.15. Key API differences from older versions that ar
 
 ## License
 
-MIT — do whatever you want with this code.
+Apache-2.0
