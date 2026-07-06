@@ -268,7 +268,11 @@ fn spawn_building<R: Rng>(
                 &mut *windows_off
             };
 
-            batch.push_quad(Transform::from_xyz(cx + x, y, cz + d / 2.0 + 0.01), 0.9, 1.4);
+            batch.push_quad(
+                Transform::from_xyz(cx + x, y, cz + d / 2.0 + 0.01),
+                0.9,
+                1.4,
+            );
             batch.push_quad(
                 Transform::from_xyz(cx + x, y, cz - d / 2.0 - 0.01)
                     .with_rotation(Quat::from_rotation_y(PI)),
