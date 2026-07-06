@@ -11,6 +11,7 @@ mod camera;
 mod car;
 mod city;
 mod config;
+mod daynight;
 mod hud;
 mod input;
 mod pedestrian;
@@ -53,6 +54,9 @@ fn main() {
         .insert_resource(DirectionalLightShadowMap {
             size: config.graphics.shadow_map_size,
         })
+        .insert_resource(daynight::DayNight {
+            hour: config.day_night.start_hour,
+        })
         .insert_resource(config)
         // Resources
         .init_resource::<resources::GameState>()
@@ -74,6 +78,10 @@ fn main() {
             Startup,
             pedestrian::spawn_peds.after(resources::setup_game_assets),
         )
+        .add_systems(
+            Startup,
+            daynight::spawn_street_lamps.after(resources::setup_game_assets),
+        )
         // Update systems
         .add_systems(
             Update,
@@ -93,6 +101,7 @@ fn main() {
                 police::update_police,
                 camera::update_camera,
                 player::update_wanted_decay,
+                daynight::update_day_night,
                 hud::update_hud,
             )
                 .chain(),
@@ -158,5 +167,7 @@ fn setup_world(mut commands: Commands, config: Res<GameConfig>) {
         },
         cascade_config,
         Transform::from_xyz(60.0, 100.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
+        // Tagged so the day/night cycle can move and dim it every frame.
+        daynight::Sun,
     ));
 }

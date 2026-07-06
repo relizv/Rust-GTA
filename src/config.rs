@@ -20,6 +20,7 @@ pub struct GameConfig {
     pub player: PlayerConfig,
     pub driving: DrivingConfig,
     pub police: PoliceConfig,
+    pub day_night: DayNightConfig,
 }
 
 #[derive(Clone)]
@@ -126,8 +127,8 @@ pub struct PoliceConfig {
     pub cars_per_star: usize,
     /// Hard cap on simultaneous cop cars.
     pub max_cars: usize,
-    /// Chase speed, m/s. For reference: the player runs at 9 and drives at 28,
-    /// so on foot you can't outrun them — steal a car.
+    /// Chase speed, m/s. For reference: the player runs at 9 and drives at
+    /// 28 — on foot you can't outrun them, in a car it's a proper chase.
     pub chase_speed: f32,
     /// How quickly cops turn toward you (steering lerp rate, 1/s).
     pub steer_rate: f32,
@@ -142,7 +143,11 @@ pub struct PoliceConfig {
     /// Light bar flash rate: red/blue swaps per second.
     pub flash_hz: f32,
     /// Seconds of good behavior for one wanted star to decay.
+    /// The timer doesn't tick while a cop is within `escape_distance` of you.
     pub wanted_decay_secs: f32,
+    /// Wanted stars only start decaying once every cop is farther away
+    /// than this, m.
+    pub escape_distance: f32,
 }
 
 impl Default for PoliceConfig {
@@ -150,7 +155,7 @@ impl Default for PoliceConfig {
         Self {
             cars_per_star: 1,
             max_cars: 4,
-            chase_speed: 15.0,
+            chase_speed: 19.0,
             steer_rate: 2.2,
             spawn_distance: 50.0,
             contact_radius: 2.4,
@@ -158,6 +163,39 @@ impl Default for PoliceConfig {
             busted_fine_frac: 0.5,
             flash_hz: 5.0,
             wanted_decay_secs: 18.0,
+            escape_distance: 45.0,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct DayNightConfig {
+    /// Master switch. `false` = permanent noon, like before.
+    pub enabled: bool,
+    /// Real seconds for a full in-game 24h cycle. 600 = 10 minutes.
+    pub day_length_secs: f32,
+    /// In-game hour at startup (0.0..24.0). 9.5 = 09:30.
+    pub start_hour: f32,
+    /// Sun brightness at noon, lux (~10 000 = bright daylight).
+    pub sun_lux: f32,
+    /// Moonlight brightness at night, lux.
+    pub moon_lux: f32,
+    /// Ambient fill at noon.
+    pub day_ambient: f32,
+    /// Ambient fill at midnight.
+    pub night_ambient: f32,
+}
+
+impl Default for DayNightConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            day_length_secs: 600.0,
+            start_hour: 9.5,
+            sun_lux: 10_000.0,
+            moon_lux: 25.0,
+            day_ambient: 300.0,
+            night_ambient: 50.0,
         }
     }
 }

@@ -15,6 +15,7 @@ use bevy_egui::{egui, EguiContexts};
 
 use crate::car::Car;
 use crate::config::GameConfig;
+use crate::daynight::DayNight;
 use crate::pedestrian::Pedestrian;
 use crate::player::Player;
 use crate::police::PoliceCar;
@@ -25,6 +26,7 @@ pub fn update_hud(
     mut contexts: EguiContexts,
     diagnostics: Res<DiagnosticsStore>,
     config: Res<GameConfig>,
+    day_night: Res<DayNight>,
     mut game_state: ResMut<GameState>,
     mut input_state: ResMut<InputState>,
     mut windows: Query<&mut Window>,
@@ -110,6 +112,21 @@ pub fn update_hud(
                             });
                         }
                     }
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new("Время")
+                                .color(egui::Color32::from_rgb(170, 170, 187)),
+                        );
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{:02}:{:02}",
+                                day_night.hour as u32,
+                                ((day_night.hour % 1.0) * 60.0) as u32
+                            ))
+                            .color(egui::Color32::from_rgb(255, 220, 130))
+                            .strong(),
+                        );
+                    });
                     ui.horizontal(|ui| {
                         ui.label(
                             egui::RichText::new("Здоровье")

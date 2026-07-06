@@ -9,6 +9,7 @@ use std::f32::consts::PI;
 use crate::car::Car;
 use crate::config::GameConfig;
 use crate::pedestrian::Pedestrian;
+use crate::police::PoliceCar;
 use crate::resources::{GameAssets, GameState, InputState, KeysPressed, CITY_HALF, ROAD_W};
 
 #[derive(Component)]
@@ -342,6 +343,8 @@ pub fn update_wanted_decay(
     time: Res<Time>,
     config: Res<GameConfig>,
     mut game_state: ResMut<GameState>,
+    player_q: Query<&GlobalTransform, With<Player>>,
+    police: Query<&GlobalTransform, With<PoliceCar>>,
 ) {
     if let Some((_, t)) = &mut game_state.toast {
         *t -= time.delta_secs();
@@ -350,6 +353,21 @@ pub fn update_wanted_decay(
         }
     }
     if game_state.wanted > 0 {
+        // Stars only decay once you've actually shaken the cops off: while
+        // any cop is within `escape_distance`, the timer keeps resetting.
+        let cop_nearby = player_q
+            .get_single()
+            .map(|pgt| {
+                let p = pgt.translation();
+                police
+                    .iter()
+                    .any(|c| c.translation().distance(p) < config.police.escape_distance)
+            })
+            .unwrap_or(false);
+        if cop_nearby {
+            game_state.wanted_decay_timer = 0.0;
+            return;
+        }
         game_state.wanted_decay_timer += time.delta_secs();
         if game_state.wanted_decay_timer > config.police.wanted_decay_secs {
             game_state.wanted -= 1;

@@ -11,7 +11,8 @@ Gameplay mirrors the JS version:
 - Walk up to a car and press **F** to steal it
 - HUD: top-left info, top-right wanted stars, bottom-left minimap (rotates with view), bottom-right speedometer
 - Wanted system: rises when you steal a car, decays after ~18s of good behavior
-- Police: cop cars with flashing red/blue light bars spawn at 1+ stars and chase you; if they corner you — busted (fine + respawn)
+- Police: cop cars with flashing red/blue light bars spawn at 1+ stars and chase you; if they corner you — busted (fine + respawn). Stars don't decay while a cop is near you
+- Day/night cycle (10-min day): moving sun, sunrise/sunset skies, windows glow and street lamps switch on at night; HUD clock
 - FPS counter (top-left) and a central config file (`src/config.rs`) with all gameplay/graphics tunables
 
 ## Controls
@@ -66,6 +67,7 @@ mini-gta-rust/
 └── src/
     ├── main.rs         # App entry: plugins, lights, fog, cascade shadows
     ├── config.rs       # ALL gameplay/graphics tunables in one place
+    ├── daynight.rs     # Day/night cycle: sun, sky, night windows, street lamps
     ├── resources.rs    # Constants, GameState, InputState, GameAssets
     ├── input.rs        # Keyboard/mouse capture, pointer lock
     ├── city.rs         # Road grid, sidewalks, buildings + windows

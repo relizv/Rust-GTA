@@ -119,6 +119,10 @@ pub struct GameAssets {
     pub mat_lamp_red_off: Handle<StandardMaterial>,
     pub mat_lamp_blue_on: Handle<StandardMaterial>,
     pub mat_lamp_blue_off: Handle<StandardMaterial>,
+
+    // Street lamps (head emissive is driven by the day/night cycle)
+    pub mat_lamp_pole: Handle<StandardMaterial>,
+    pub mat_lamp_head: Handle<StandardMaterial>,
 }
 
 pub fn setup_game_assets(
@@ -260,6 +264,15 @@ pub fn setup_game_assets(
         ..default()
     });
 
+    // --- Street lamps: dark pole + a head whose emissive is switched on at
+    // night by `daynight::update_day_night` (one shared material for all). ---
+    let mat_lamp_pole = lambert(&mut materials, Color::srgb(0.16, 0.17, 0.18));
+    let mat_lamp_head = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.75, 0.75, 0.70),
+        emissive: LinearRgba::BLACK,
+        ..default()
+    });
+
     commands.insert_resource(GameAssets {
         mesh_unit_box,
         mesh_unit_plane,
@@ -298,5 +311,7 @@ pub fn setup_game_assets(
         mat_lamp_red_off,
         mat_lamp_blue_on,
         mat_lamp_blue_off,
+        mat_lamp_pole,
+        mat_lamp_head,
     });
 }
