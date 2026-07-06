@@ -94,10 +94,12 @@ fn setup_world(mut commands: Commands) {
         },
     ));
 
-    // Ambient + hemisphere fill
+    // Ambient + hemisphere fill.
+    // NOTE: Bevy 0.15 uses physical-ish units here (default brightness is
+    // 80.0), NOT the 0..1 intensity scale of Three.js. 0.55 was pitch black.
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
-        brightness: 0.55,
+        brightness: 300.0,
     });
 
     // Ambient + directional lights suffice for the scene's fill lighting.
@@ -118,9 +120,12 @@ fn setup_world(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
             color: Color::srgb(1.0, 0.957, 0.878),
-            illuminance: 1.0,
+            // Lux (physical units). 1.0 lux is moonlight — that's why the
+            // scene was almost black. ~10 000 lux = bright daylight.
+            illuminance: 10_000.0,
             shadows_enabled: true,
-            shadow_depth_bias: -0.0005,
+            // Default depth bias; the previous negative value caused shadow
+            // acne (dark speckles) on walls and the ground.
             ..default()
         },
         cascade_config,
