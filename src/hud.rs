@@ -7,18 +7,24 @@
 //! - Center-top: toast notification
 //! - Center:    start overlay (when not started) + pause overlay (cursor unlocked)
 
+use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::transform::components::GlobalTransform;
 use bevy::window::CursorGrabMode;
 use bevy_egui::{egui, EguiContexts};
 
 use crate::car::Car;
+use crate::config::GameConfig;
 use crate::pedestrian::Pedestrian;
 use crate::player::Player;
+use crate::police::PoliceCar;
 use crate::resources::{GameState, InputState, CITY_HALF, GRID, STEP};
 
+#[allow(clippy::too_many_arguments)]
 pub fn update_hud(
     mut contexts: EguiContexts,
+    diagnostics: Res<DiagnosticsStore>,
+    config: Res<GameConfig>,
     mut game_state: ResMut<GameState>,
     mut input_state: ResMut<InputState>,
     mut windows: Query<&mut Window>,
@@ -27,6 +33,7 @@ pub fn update_hud(
     player_q: Query<&GlobalTransform, With<Player>>,
     cars: Query<&GlobalTransform, With<Car>>,
     peds: Query<&GlobalTransform, With<Pedestrian>>,
+    police: Query<&GlobalTransform, With<PoliceCar>>,
 ) {
     let ctx = contexts.ctx_mut();
 
@@ -85,6 +92,24 @@ pub fn update_hud(
                 .fill(egui::Color32::from_black_alpha(140))
                 .show(ui, |ui| {
                     ui.set_min_width(180.0);
+                    if config.graphics.fps_counter {
+                        if let Some(fps) = diagnostics
+                            .get(&FrameTimeDiagnosticsPlugin::FPS)
+                            .and_then(|d| d.smoothed())
+                        {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new("FPS")
+                                        .color(egui::Color32::from_rgb(170, 170, 187)),
+                                );
+                                ui.label(
+                                    egui::RichText::new(format!("{fps:.0}"))
+                                        .color(egui::Color32::from_rgb(120, 255, 120))
+                                        .strong(),
+                                );
+                            });
+                        }
+                    }
                     ui.horizontal(|ui| {
                         ui.label(
                             egui::RichText::new("Здоровье")
@@ -196,6 +221,15 @@ pub fn update_hud(
                 let ry = (cp.z - player_pos.z) * scale;
                 let p = rotate2d(rx, ry, rot);
                 painter.circle_filled(center + p, 2.2, egui::Color32::from_rgb(255, 255, 80));
+            }
+
+            // Police (blue dots)
+            for cop_gt in police.iter() {
+                let cp = cop_gt.translation();
+                let rx = (cp.x - player_pos.x) * scale;
+                let ry = (cp.z - player_pos.z) * scale;
+                let p = rotate2d(rx, ry, rot);
+                painter.circle_filled(center + p, 2.6, egui::Color32::from_rgb(70, 130, 255));
             }
 
             // Peds (white dots)

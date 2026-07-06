@@ -3,32 +3,57 @@
 //! A browser-style mini-GTA ported from Three.js to Bevy + wgpu.
 //! Visual style is preserved: blocky low-poly characters, windows on
 //! buildings, dashed road lines, fog, directional sun + shadows.
+//!
+//! All tunables (graphics, physics, player, driving, police) live in
+//! `src/config.rs`.
 
 mod camera;
 mod car;
 mod city;
+mod config;
 mod hud;
 mod input;
 mod pedestrian;
 mod player;
+mod police;
 mod resources;
 
-use bevy::pbr::CascadeShadowConfigBuilder;
+use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
+use bevy::pbr::{CascadeShadowConfigBuilder, DirectionalLightShadowMap};
 use bevy::prelude::*;
+use bevy::window::PresentMode;
 use bevy_egui::EguiPlugin;
 
+use config::GameConfig;
+
 fn main() {
+    // Everything you might want to tweak is in src/config.rs.
+    let config = GameConfig::default();
+
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Mini GTA — Rust Edition".into(),
-                resolution: (1280.0, 720.0).into(),
+                resolution: (config.graphics.window_width, config.graphics.window_height).into(),
+                present_mode: if config.graphics.vsync {
+                    PresentMode::AutoVsync
+                } else {
+                    PresentMode::AutoNoVsync
+                },
                 resizable: true,
                 ..default()
             }),
             ..default()
         }))
         .add_plugins(EguiPlugin)
+        // Data source for the HUD FPS counter.
+        .add_plugins(FrameTimeDiagnosticsPlugin)
+        // Shadow map resolution: 1024 is plenty for this style and much
+        // cheaper than Bevy's 2048 default on weak GPUs.
+        .insert_resource(DirectionalLightShadowMap {
+            size: config.graphics.shadow_map_size,
+        })
+        .insert_resource(config)
         // Resources
         .init_resource::<resources::GameState>()
         .init_resource::<resources::InputState>()
@@ -64,6 +89,8 @@ fn main() {
                 // apply on the next frame. This ordering avoids Bevy 0.15's
                 // B0001 panic on conflicting `&mut Transform` accesses.
                 player::player_punch,
+                police::manage_police,
+                police::update_police,
                 camera::update_camera,
                 player::update_wanted_decay,
                 hud::update_hud,
@@ -74,13 +101,20 @@ fn main() {
 }
 
 /// Spawn camera, lights, fog, and the grass ground.
-fn setup_world(mut commands: Commands) {
+fn setup_world(mut commands: Commands, config: Res<GameConfig>) {
     // Camera with fog (matches the JS scene.background #87ceeb + fog 80..250)
     commands.spawn((
         Camera3d::default(),
         Camera {
             hdr: false,
             ..default()
+        },
+        // MSAA off is a large FPS win on integrated GPUs; the low-poly style
+        // barely changes visually. (Msaa is a per-camera component in 0.15.)
+        if config.graphics.msaa {
+            Msaa::Sample4
+        } else {
+            Msaa::Off
         },
         Transform::from_xyz(0.0, 10.0, 12.0).looking_at(Vec3::ZERO, Vec3::Y),
         DistanceFog {
@@ -102,16 +136,12 @@ fn setup_world(mut commands: Commands) {
         brightness: 300.0,
     });
 
-    // Ambient + directional lights suffice for the scene's fill lighting.
-    // (HemisphereLight's bundle was removed; spawning it component-only is
-    // unnecessary here, so we rely on AmbientLight above.)
-
-    // Sun (directional) with cascaded shadows covering the whole city.
+    // Sun (directional) with cascaded shadows.
     let cascade_config = CascadeShadowConfigBuilder {
         num_cascades: 1,
         minimum_distance: 10.0,
-        maximum_distance: 250.0,
-        first_cascade_far_bound: 250.0,
+        maximum_distance: config.graphics.shadow_distance,
+        first_cascade_far_bound: config.graphics.shadow_distance,
         overlap_proportion: 0.0,
         ..default()
     }
@@ -123,9 +153,7 @@ fn setup_world(mut commands: Commands) {
             // Lux (physical units). 1.0 lux is moonlight — that's why the
             // scene was almost black. ~10 000 lux = bright daylight.
             illuminance: 10_000.0,
-            shadows_enabled: true,
-            // Default depth bias; the previous negative value caused shadow
-            // acne (dark speckles) on walls and the ground.
+            shadows_enabled: config.graphics.shadows_enabled,
             ..default()
         },
         cascade_config,

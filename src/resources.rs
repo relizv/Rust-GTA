@@ -110,6 +110,15 @@ pub struct GameAssets {
     pub mat_car_colors: Vec<Handle<StandardMaterial>>,
     // Building body material pool
     pub mat_building_colors: Vec<Handle<StandardMaterial>>,
+
+    // Police materials (body, cabin, light bar + flashing lamp variants)
+    pub mat_police_body: Handle<StandardMaterial>,
+    pub mat_police_cabin: Handle<StandardMaterial>,
+    pub mat_lightbar: Handle<StandardMaterial>,
+    pub mat_lamp_red_on: Handle<StandardMaterial>,
+    pub mat_lamp_red_off: Handle<StandardMaterial>,
+    pub mat_lamp_blue_on: Handle<StandardMaterial>,
+    pub mat_lamp_blue_off: Handle<StandardMaterial>,
 }
 
 pub fn setup_game_assets(
@@ -224,6 +233,33 @@ pub fn setup_game_assets(
         .map(|c| lambert(&mut materials, *c))
         .collect();
 
+    // --- Police: white body, black cabin, roof light bar with red/blue
+    // lamps. Each lamp has an "on" (bright emissive) and "off" (dim) variant;
+    // `police::update_police` swaps them to make the bar flash. ---
+    let mat_police_body = lambert(&mut materials, Color::srgb(0.95, 0.95, 0.97));
+    let mat_police_cabin = lambert(&mut materials, Color::srgb(0.08, 0.08, 0.10));
+    let mat_lightbar = lambert(&mut materials, Color::srgb(0.05, 0.05, 0.06));
+    let mat_lamp_red_on = materials.add(StandardMaterial {
+        base_color: Color::srgb(1.0, 0.15, 0.15),
+        emissive: LinearRgba::rgb(8.0, 0.3, 0.3),
+        ..default()
+    });
+    let mat_lamp_red_off = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.3, 0.04, 0.04),
+        emissive: LinearRgba::rgb(0.1, 0.0, 0.0),
+        ..default()
+    });
+    let mat_lamp_blue_on = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.25, 0.45, 1.0),
+        emissive: LinearRgba::rgb(0.4, 1.5, 8.0),
+        ..default()
+    });
+    let mat_lamp_blue_off = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.04, 0.08, 0.3),
+        emissive: LinearRgba::rgb(0.0, 0.02, 0.1),
+        ..default()
+    });
+
     commands.insert_resource(GameAssets {
         mesh_unit_box,
         mesh_unit_plane,
@@ -255,5 +291,12 @@ pub fn setup_game_assets(
         mat_player_hair,
         mat_car_colors: car_colors,
         mat_building_colors: building_colors,
+        mat_police_body,
+        mat_police_cabin,
+        mat_lightbar,
+        mat_lamp_red_on,
+        mat_lamp_red_off,
+        mat_lamp_blue_on,
+        mat_lamp_blue_off,
     });
 }

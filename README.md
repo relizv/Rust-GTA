@@ -11,6 +11,8 @@ Gameplay mirrors the JS version:
 - Walk up to a car and press **F** to steal it
 - HUD: top-left info, top-right wanted stars, bottom-left minimap (rotates with view), bottom-right speedometer
 - Wanted system: rises when you steal a car, decays after ~18s of good behavior
+- Police: cop cars with flashing red/blue light bars spawn at 1+ stars and chase you; if they corner you — busted (fine + respawn)
+- FPS counter (top-left) and a central config file (`src/config.rs`) with all gameplay/graphics tunables
 
 ## Controls
 
@@ -63,12 +65,14 @@ mini-gta-rust/
 ├── README.md
 └── src/
     ├── main.rs         # App entry: plugins, lights, fog, cascade shadows
+    ├── config.rs       # ALL gameplay/graphics tunables in one place
     ├── resources.rs    # Constants, GameState, InputState, GameAssets
     ├── input.rs        # Keyboard/mouse capture, pointer lock
     ├── city.rs         # Road grid, sidewalks, buildings + windows
     ├── player.rs       # Player spawn, movement, limbs, enter/exit car, punch
     ├── car.rs          # Car spawn, AI navigation, player driving
     ├── pedestrian.rs   # Ped spawn + sidewalk AI
+    ├── police.rs       # Cop cars: spawn on wanted, chase AI, flashing light bar
     ├── camera.rs       # Smooth third-person follow camera
     └── hud.rs          # egui HUD (info, minimap, speedo, stars, start overlay)
 ```
@@ -95,7 +99,6 @@ This codebase targets Bevy 0.15. Key API differences from older versions that ar
 - **No audio** (Bevy has `bevy_audio` if you want engine/siren sounds).
 - **AI cars don't avoid each other** — they can clip through one another at intersections.
 - **No save/load** of game state.
-- **Performance**: hundreds of building-window quads are spawned individually. If FPS drops, consider baking windows into a single texture per building.
 
 ## License
 

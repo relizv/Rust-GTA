@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use rand::Rng;
 
 use crate::city::Building;
+use crate::config::GameConfig;
 use crate::resources::{GameAssets, GameState, KeysPressed, CITY_HALF, GRID, STEP};
 
 #[derive(Component)]
@@ -149,6 +150,7 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
 
 pub fn update_ai_cars(
     time: Res<Time>,
+    config: Res<GameConfig>,
     keys: Res<KeysPressed>,
     mut game_state: ResMut<GameState>,
     mut cars: Query<(Entity, &mut Car, &mut Transform, &mut CarWheels)>,
@@ -171,11 +173,11 @@ pub fn update_ai_cars(
 
         if driven {
             // ----- Player driving -----
-            let max_speed = 28.0_f32;
+            let max_speed = config.driving.max_speed;
             if keys.w {
-                wheels.spin += 18.0 * dt;
+                wheels.spin += config.driving.accel * dt;
             } else if keys.s {
-                wheels.spin -= 18.0 * dt;
+                wheels.spin -= config.driving.accel * dt;
             } else {
                 wheels.spin *= (1.0 - 1.4 * dt).max(0.0);
                 if wheels.spin.abs() < 0.05 {
@@ -192,7 +194,8 @@ pub fn update_ai_cars(
                 steer += 1.0;
             }
             let speed_factor = (wheels.spin.abs() / 6.0).min(1.0);
-            let yaw_delta = steer * 1.6 * dt * speed_factor * wheels.spin.signum();
+            let yaw_delta =
+                steer * config.driving.steer_rate * dt * speed_factor * wheels.spin.signum();
             let new_yaw = transform.rotation.to_euler(EulerRot::YXZ).0 + yaw_delta;
             transform.rotation = Quat::from_rotation_y(new_yaw);
 
@@ -315,7 +318,7 @@ fn apply_wheel_spin(
     }
 }
 
-fn collides_buildings_at(x: f32, z: f32, radius: f32, buildings: &Query<&Building>) -> bool {
+pub fn collides_buildings_at(x: f32, z: f32, radius: f32, buildings: &Query<&Building>) -> bool {
     for b in buildings.iter() {
         let dx = (x - b.cx).abs();
         let dz = (z - b.cz).abs();

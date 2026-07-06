@@ -7,6 +7,7 @@ use bevy::transform::components::GlobalTransform;
 use std::f32::consts::PI;
 
 use crate::car::Car;
+use crate::config::GameConfig;
 use crate::pedestrian::Pedestrian;
 use crate::resources::{GameAssets, GameState, InputState, KeysPressed, CITY_HALF, ROAD_W};
 
@@ -120,6 +121,7 @@ pub fn spawn_player(mut commands: Commands, assets: Res<GameAssets>) {
 pub fn update_player(
     mut commands: Commands,
     time: Res<Time>,
+    config: Res<GameConfig>,
     keys: Res<KeysPressed>,
     input_state: Res<InputState>,
     mut game_state: ResMut<GameState>,
@@ -226,7 +228,11 @@ pub fn update_player(
         move_vec -= right;
     }
 
-    let speed = if keys.shift { 9.0 } else { 4.5 };
+    let speed = if keys.shift {
+        config.player.run_speed
+    } else {
+        config.player.walk_speed
+    };
 
     if move_vec.length_squared() > 0.0 {
         move_vec = move_vec.normalize() * speed;
@@ -240,10 +246,10 @@ pub fn update_player(
     }
 
     if keys.space && state.on_ground {
-        state.vel.y = 7.5;
+        state.vel.y = config.player.jump_velocity;
         state.on_ground = false;
     }
-    state.vel.y -= 22.0 * time.delta_secs();
+    state.vel.y -= config.world.gravity * time.delta_secs();
 
     transform.translation += state.vel * time.delta_secs();
     if transform.translation.y <= 0.0 {
@@ -293,6 +299,7 @@ fn animate_limb(
 /// the ped's sidewalk movement this frame.
 pub fn player_punch(
     mouse_buttons: Res<ButtonInput<MouseButton>>,
+    config: Res<GameConfig>,
     // Use GlobalTransform for the player position to avoid B0001 with
     // `update_player`'s `&mut Transform` write on the player.
     player_q: Query<(&GlobalTransform, &PlayerState), With<Player>>,
@@ -318,7 +325,7 @@ pub fn player_punch(
         // current position to test distance, but we cannot read Transform here.
         // Workaround: store the last known position in Pedestrian each frame
         // (see `update_peds` where we sync `ped.pos = transform.translation`).
-        if ped.pos.distance(hit_pos) < 1.4 {
+        if ped.pos.distance(hit_pos) < config.player.punch_range {
             let mut knock = (ped.pos - hit_pos).normalize_or_zero() * 2.5;
             knock.y = 0.0;
             ped.knockback += knock;
@@ -326,12 +333,16 @@ pub fn player_punch(
         }
     }
     if hit_count > 0 {
-        game_state.cash += 5 * hit_count;
-        game_state.show_toast(format!("+${}", 5 * hit_count));
+        game_state.cash += config.player.cash_per_punch * hit_count;
+        game_state.show_toast(format!("+${}", config.player.cash_per_punch * hit_count));
     }
 }
 
-pub fn update_wanted_decay(time: Res<Time>, mut game_state: ResMut<GameState>) {
+pub fn update_wanted_decay(
+    time: Res<Time>,
+    config: Res<GameConfig>,
+    mut game_state: ResMut<GameState>,
+) {
     if let Some((_, t)) = &mut game_state.toast {
         *t -= time.delta_secs();
         if *t <= 0.0 {
@@ -340,7 +351,7 @@ pub fn update_wanted_decay(time: Res<Time>, mut game_state: ResMut<GameState>) {
     }
     if game_state.wanted > 0 {
         game_state.wanted_decay_timer += time.delta_secs();
-        if game_state.wanted_decay_timer > 18.0 {
+        if game_state.wanted_decay_timer > config.police.wanted_decay_secs {
             game_state.wanted -= 1;
             game_state.wanted_decay_timer = 0.0;
         }
