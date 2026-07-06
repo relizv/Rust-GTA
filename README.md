@@ -15,6 +15,7 @@ Gameplay mirrors the JS version:
 - Day/night cycle (10-min day): moving sun, sunrise/sunset skies, windows glow and street lamps switch on at night; HUD clock
 - FPS counter (top-left) and a central config file (`src/config.rs`) with all gameplay/graphics tunables
 - Pause/settings menu on **ESC**: a true pause (the virtual clock freezes), live graphics & gameplay sliders, and a quit button
+- Weapons & combat: a pistol (key **2**) with hitscan bullets, glowing tracers, RMB aiming (camera zoom + tight spread) and auto-reload; peds and cop cars have HP — kills pay cash but raise your wanted level, destroyed cop cars explode, and fresh peds respawn away from the player so the city never empties
 
 ## Controls
 
@@ -25,11 +26,13 @@ Gameplay mirrors the JS version:
 | SHIFT | Sprint |
 | SPACE | Jump |
 | F | Enter / exit nearest car |
-| LMB | Punch (knock back peds, +$5 each) |
+| LMB | Punch / fire the pistol |
+| 1 / 2 | Switch to fists / pistol |
+| RMB (hold) | Aim (zoom + tight spread) |
 | R | Reset position |
-| ESC | Release cursor (pause) |
+| ESC | Pause & settings menu |
 
-Click anywhere in the window to re-lock the cursor and resume play.
+ESC is a true pause — the whole simulation freezes until you resume.
 
 ## Requirements
 
@@ -76,6 +79,7 @@ mini-gta-rust/
     ├── car.rs          # Car spawn, AI navigation, player driving
     ├── pedestrian.rs   # Ped spawn + sidewalk AI
     ├── police.rs       # Cop cars: spawn on wanted, chase AI, flashing light bar
+    ├── weapons.rs      # Pistol: hitscan shots, tracers, HP, corpses, explosions
     ├── settings.rs     # Applies pause-menu graphics changes to live engine state
     ├── camera.rs       # Smooth third-person follow camera
     └── hud.rs          # egui HUD (info, minimap, speedo, stars, start overlay)
@@ -106,4 +110,4 @@ This codebase targets Bevy 0.15. Key API differences from older versions that ar
 
 ## License
 
-Apache-2.0
+MIT — do whatever you want with this code.

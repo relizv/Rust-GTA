@@ -85,6 +85,7 @@ pub struct GameAssets {
     pub mesh_car_windshield: Handle<Mesh>,
     pub mesh_car_headlight: Handle<Mesh>,
     pub mesh_window: Handle<Mesh>,
+    pub mesh_pistol: Handle<Mesh>,
 
     // Static environment materials
     pub mat_ground: Handle<StandardMaterial>,
@@ -123,6 +124,11 @@ pub struct GameAssets {
     // Street lamps (head emissive is driven by the day/night cycle)
     pub mat_lamp_pole: Handle<StandardMaterial>,
     pub mat_lamp_head: Handle<StandardMaterial>,
+
+    // Weapons: pistol in hand, bullet tracer, cop-car explosion flash
+    pub mat_pistol: Handle<StandardMaterial>,
+    pub mat_tracer: Handle<StandardMaterial>,
+    pub mat_explosion: Handle<StandardMaterial>,
 }
 
 pub fn setup_game_assets(
@@ -148,6 +154,7 @@ pub fn setup_game_assets(
     let mesh_car_windshield = meshes.add(Rectangle::new(1.6, 0.6));
     let mesh_car_headlight = meshes.add(Cuboid::new(0.3, 0.15, 0.05));
     let mesh_window = meshes.add(Rectangle::new(0.9, 1.4));
+    let mesh_pistol = meshes.add(Cuboid::new(0.09, 0.14, 0.38));
 
     // --- Materials ---
     let lambert = |mats: &mut Assets<StandardMaterial>, color: Color| -> Handle<StandardMaterial> {
@@ -273,6 +280,15 @@ pub fn setup_game_assets(
         ..default()
     });
 
+    // --- Weapons: pistol in hand, bullet tracer, cop-car explosion flash ---
+    let mat_pistol = lambert(&mut materials, Color::srgb(0.10, 0.10, 0.12));
+    let mat_tracer = unlit(&mut materials, Color::srgb(1.0, 0.9, 0.45));
+    let mat_explosion = materials.add(StandardMaterial {
+        base_color: Color::srgb(1.0, 0.55, 0.1),
+        emissive: LinearRgba::rgb(8.0, 3.0, 0.6),
+        ..default()
+    });
+
     commands.insert_resource(GameAssets {
         mesh_unit_box,
         mesh_unit_plane,
@@ -286,6 +302,7 @@ pub fn setup_game_assets(
         mesh_car_windshield,
         mesh_car_headlight,
         mesh_window,
+        mesh_pistol,
         mat_ground,
         mat_road,
         mat_sidewalk,
@@ -313,5 +330,8 @@ pub fn setup_game_assets(
         mat_lamp_blue_off,
         mat_lamp_pole,
         mat_lamp_head,
+        mat_pistol,
+        mat_tracer,
+        mat_explosion,
     });
 }

@@ -20,6 +20,7 @@ pub struct GameConfig {
     pub player: PlayerConfig,
     pub driving: DrivingConfig,
     pub police: PoliceConfig,
+    pub weapons: WeaponConfig,
     pub day_night: DayNightConfig,
 }
 
@@ -164,6 +165,53 @@ impl Default for PoliceConfig {
             flash_hz: 5.0,
             wanted_decay_secs: 18.0,
             escape_distance: 45.0,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct WeaponConfig {
+    /// Damage per pistol bullet.
+    pub pistol_damage: f32,
+    /// Max bullet travel distance, m.
+    pub pistol_range: f32,
+    /// Seconds between shots (hold LMB for rapid fire).
+    pub fire_cooldown: f32,
+    /// Magazine size; the pistol auto-reloads when it runs dry.
+    pub magazine: u32,
+    /// Reload time, seconds.
+    pub reload_secs: f32,
+    /// Bullet spread from the hip, degrees.
+    pub hip_spread_deg: f32,
+    /// Bullet spread while aiming (hold RMB), degrees.
+    pub aim_spread_deg: f32,
+    /// Camera distance while aiming (normal third-person is 7).
+    pub aim_zoom_dist: f32,
+    /// Pedestrian health (two default bullets = down).
+    pub ped_hp: f32,
+    /// Police car health (three default bullets = boom).
+    pub police_car_hp: f32,
+    /// Cash per kill. This city has questionable morals.
+    pub cash_per_kill: i32,
+    /// Seconds before a body disappears.
+    pub corpse_despawn_secs: f32,
+}
+
+impl Default for WeaponConfig {
+    fn default() -> Self {
+        Self {
+            pistol_damage: 25.0,
+            pistol_range: 60.0,
+            fire_cooldown: 0.22,
+            magazine: 12,
+            reload_secs: 1.1,
+            hip_spread_deg: 2.2,
+            aim_spread_deg: 0.35,
+            aim_zoom_dist: 3.4,
+            ped_hp: 50.0,
+            police_car_hp: 75.0,
+            cash_per_kill: 20,
+            corpse_despawn_secs: 20.0,
         }
     }
 }

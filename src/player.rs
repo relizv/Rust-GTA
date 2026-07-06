@@ -11,6 +11,7 @@ use crate::config::GameConfig;
 use crate::pedestrian::Pedestrian;
 use crate::police::PoliceCar;
 use crate::resources::{GameAssets, GameState, InputState, KeysPressed, CITY_HALF, ROAD_W};
+use crate::weapons::{PistolMesh, WeaponState};
 
 #[derive(Component)]
 pub struct Player;
@@ -56,6 +57,17 @@ pub fn spawn_player(mut commands: Commands, assets: Res<GameAssets>) {
             PlayerLimb,
         ))
         .id();
+    // Pistol in the right hand — hidden until equipped (see `weapons.rs`).
+    let pistol = commands
+        .spawn((
+            Mesh3d(assets.mesh_pistol.clone()),
+            MeshMaterial3d(assets.mat_pistol.clone()),
+            Transform::from_xyz(0.0, -0.34, 0.16),
+            Visibility::Hidden,
+            PistolMesh,
+        ))
+        .id();
+    commands.entity(arm_r).add_children(&[pistol]);
     let leg_l = commands
         .spawn((
             Mesh3d(assets.mesh_player_leg.clone()),
@@ -302,6 +314,7 @@ pub fn player_punch(
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     config: Res<GameConfig>,
     input_state: Res<InputState>,
+    weapon: Res<WeaponState>,
     // Use GlobalTransform for the player position to avoid B0001 with
     // `update_player`'s `&mut Transform` write on the player.
     player_q: Query<(&GlobalTransform, &PlayerState), With<Player>>,
@@ -314,6 +327,10 @@ pub fn player_punch(
 ) {
     // Ignore clicks while the pause menu is open — those are UI clicks.
     if !input_state.cursor_locked {
+        return;
+    }
+    // With the pistol out, LMB shoots (see `weapons::player_shoot`).
+    if weapon.pistol_equipped {
         return;
     }
     if !mouse_buttons.just_pressed(MouseButton::Left) || game_state.in_vehicle.is_some() {

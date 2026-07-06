@@ -19,6 +19,7 @@ mod player;
 mod police;
 mod resources;
 mod settings;
+mod weapons;
 
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::pbr::{CascadeShadowConfigBuilder, DirectionalLightShadowMap};
@@ -63,6 +64,7 @@ fn main() {
         .init_resource::<resources::GameState>()
         .init_resource::<resources::InputState>()
         .init_resource::<resources::KeysPressed>()
+        .init_resource::<weapons::WeaponState>()
         // Startup systems — order matters
         .add_systems(Startup, setup_world)
         .add_systems(Startup, resources::setup_game_assets.after(setup_world))
@@ -98,6 +100,11 @@ fn main() {
                 // apply on the next frame. This ordering avoids Bevy 0.15's
                 // B0001 panic on conflicting `&mut Transform` accesses.
                 player::player_punch,
+                weapons::weapon_input,
+                weapons::player_shoot,
+                weapons::update_pistol_visuals,
+                weapons::update_effects,
+                pedestrian::keep_ped_population,
                 police::manage_police,
                 police::update_police,
                 camera::update_camera,

@@ -21,6 +21,7 @@ use crate::pedestrian::Pedestrian;
 use crate::player::Player;
 use crate::police::PoliceCar;
 use crate::resources::{GameState, InputState, CITY_HALF, GRID, STEP};
+use crate::weapons::WeaponState;
 
 #[allow(clippy::too_many_arguments)]
 pub fn update_hud(
@@ -28,6 +29,7 @@ pub fn update_hud(
     diagnostics: Res<DiagnosticsStore>,
     mut config: ResMut<GameConfig>,
     mut day_night: ResMut<DayNight>,
+    weapon: Res<WeaponState>,
     mut virtual_time: ResMut<Time<Virtual>>,
     mut exit: EventWriter<AppExit>,
     mut game_state: ResMut<GameState>,
@@ -79,7 +81,8 @@ pub fn update_hud(
                     ui.label(
                         egui::RichText::new(
                             "WASD — движение   |   Мышь — камера   |   SHIFT — бег   |   ПРОБЕЛ — прыжок\n\
-                             F — войти/выйти из машины   |   ЛКМ — удар   |   R — сброс позиции   |   ESC — пауза и настройки"
+                             F — войти/выйти из машины   |   ЛКМ — удар / огонь   |   R — сброс позиции\n\
+                             1 — кулаки   |   2 — пистолет   |   ПКМ (держать) — прицел   |   ESC — пауза и настройки"
                         )
                         .color(egui::Color32::from_rgb(200, 200, 200))
                         .size(13.0),
@@ -308,6 +311,73 @@ pub fn update_hud(
             });
     }
 
+    // ----- Ammo (bottom-right, on foot with the pistol out) -----
+    if game_state.in_vehicle.is_none() && weapon.pistol_equipped {
+        egui::Area::new(egui::Id::new("ammo"))
+            .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-20.0, -20.0))
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .fill(egui::Color32::from_black_alpha(153))
+                    .show(ui, |ui| {
+                        ui.set_min_width(150.0);
+                        ui.vertical_centered(|ui| {
+                            ui.label(
+                                egui::RichText::new("ПИСТОЛЕТ")
+                                    .color(egui::Color32::from_rgb(170, 170, 170))
+                                    .size(11.0),
+                            );
+                            let ammo_text = if weapon.reloading {
+                                "ПЕРЕЗАРЯДКА…".to_string()
+                            } else {
+                                format!("{} / ∞", weapon.ammo)
+                            };
+                            ui.label(
+                                egui::RichText::new(ammo_text)
+                                    .color(egui::Color32::from_rgb(255, 204, 51))
+                                    .size(26.0)
+                                    .strong(),
+                            );
+                        });
+                    });
+            });
+    }
+
+    // ----- Crosshair (pistol out, on foot, not paused) -----
+    if game_state.in_vehicle.is_none() && weapon.pistol_equipped && input_state.cursor_locked {
+        egui::Area::new(egui::Id::new("crosshair"))
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .interactable(false)
+            .show(ctx, |ui| {
+                let (rect, _) =
+                    ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::hover());
+                let painter = ui.painter();
+                let c = rect.center();
+                let (gap, len, col) = if weapon.aiming {
+                    (3.0, 6.0, egui::Color32::from_rgb(255, 90, 90))
+                } else {
+                    (5.0, 6.0, egui::Color32::WHITE)
+                };
+                let stroke = egui::Stroke::new(1.6, col);
+                painter.line_segment(
+                    [c + egui::vec2(gap, 0.0), c + egui::vec2(gap + len, 0.0)],
+                    stroke,
+                );
+                painter.line_segment(
+                    [c - egui::vec2(gap, 0.0), c - egui::vec2(gap + len, 0.0)],
+                    stroke,
+                );
+                painter.line_segment(
+                    [c + egui::vec2(0.0, gap), c + egui::vec2(0.0, gap + len)],
+                    stroke,
+                );
+                painter.line_segment(
+                    [c - egui::vec2(0.0, gap), c - egui::vec2(0.0, gap + len)],
+                    stroke,
+                );
+                painter.circle_filled(c, 1.2, col);
+            });
+    }
+
     // ----- Toast (top-center) -----
     if let Some((msg, _)) = &game_state.toast {
         egui::Area::new(egui::Id::new("toast"))
@@ -417,6 +487,28 @@ pub fn update_hud(
                         );
                         ui.add(
                             egui::Slider::new(&mut config.driving.accel, 6.0..=40.0).text("Разгон"),
+                        );
+
+                        section(ui, "ОРУЖИЕ");
+                        ui.add(
+                            egui::Slider::new(&mut config.weapons.pistol_damage, 5.0..=100.0)
+                                .text("Урон пистолета"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut config.weapons.fire_cooldown, 0.05..=1.0)
+                                .text("Задержка выстрела, сек"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut config.weapons.magazine, 4..=40)
+                                .text("Магазин, патронов"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut config.weapons.ped_hp, 10.0..=200.0)
+                                .text("HP прохожих"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut config.weapons.police_car_hp, 25.0..=300.0)
+                                .text("HP машин полиции"),
                         );
 
                         section(ui, "ПОЛИЦИЯ");

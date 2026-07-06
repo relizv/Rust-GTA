@@ -1,24 +1,37 @@
 //! Pedestrians: spawn, AI walking along sidewalks, limb animation.
+//!
+//! Peds have HP (`WeaponConfig::ped_hp`). When one is killed, the
+//! `Pedestrian` component is removed and a `weapons::Corpse` stays behind —
+//! every system that queries `With<Pedestrian>` skips bodies automatically.
+//! `keep_ped_population` respawns new peds (away from the player) so the
+//! city never empties out.
 
 use bevy::prelude::*;
 use bevy::transform::components::GlobalTransform;
 use rand::Rng;
 use std::f32::consts::PI;
 
+use crate::config::GameConfig;
 use crate::player::Player;
 use crate::resources::{GameAssets, GameState, CITY_HALF, GRID, ROAD_W, STEP};
+
+/// How many peds should be walking around at any time.
+pub const PED_COUNT: usize = 22;
 
 #[derive(Component)]
 pub struct Pedestrian {
     pub speed: f32,
     pub phase: f32,
     pub change_in: f32,
+    /// Health. Two default pistol hits = down (see `WeaponConfig`).
+    pub hp: f32,
     /// Last-frame world position, synced at the end of `update_peds`. Used by
-    /// `player_punch` (which cannot read `Transform` due to B0001 conflict)
-    /// to test punch hit distance.
+    /// `player_punch` / `player_shoot` for hit tests without reading
+    /// `Transform` (B0001).
     pub pos: Vec3,
     /// Accumulated knockback impulse to apply on the next `update_peds` tick.
-    /// Written by `player_punch`, consumed and zeroed by `update_peds`.
+    /// Written by `player_punch` / `player_shoot`, consumed and zeroed by
+    /// `update_peds`.
     pub knockback: Vec3,
 }
 
@@ -30,97 +43,144 @@ pub struct PedLimbs {
     pub leg_r: Entity,
 }
 
-pub fn spawn_peds(mut commands: Commands, assets: Res<GameAssets>) {
+/// Pick a random spot on a sidewalk. Returns (position, yaw).
+fn random_ped_pose<R: Rng>(rng: &mut R) -> (Vec3, f32) {
+    let lane = rng.gen_range(0..=GRID);
+    let coord = -CITY_HALF + lane as f32 * STEP;
+    let along = -CITY_HALF + rng.gen::<f32>() * (CITY_HALF * 2.0);
+    let side_offset = (if rng.gen_bool(0.5) { -1.0 } else { 1.0 }) * (ROAD_W / 2.0 + 1.0);
+    if rng.gen_bool(0.5) {
+        (
+            Vec3::new(along, 0.3, coord + side_offset),
+            if rng.gen_bool(0.5) { 0.0 } else { PI },
+        )
+    } else {
+        (
+            Vec3::new(coord + side_offset, 0.3, along),
+            if rng.gen_bool(0.5) {
+                PI / 2.0
+            } else {
+                -PI / 2.0
+            },
+        )
+    }
+}
+
+/// Spawn a single pedestrian at the given pose.
+pub fn spawn_one_ped<R: Rng>(
+    commands: &mut Commands,
+    assets: &GameAssets,
+    config: &GameConfig,
+    pos: Vec3,
+    rot_y: f32,
+    rng: &mut R,
+) {
+    let arm_l = commands
+        .spawn((
+            Mesh3d(assets.mesh_player_arm.clone()),
+            MeshMaterial3d(assets.mat_player_shirt.clone()),
+            Transform::from_xyz(-0.36, 1.05, 0.0),
+        ))
+        .id();
+    let arm_r = commands
+        .spawn((
+            Mesh3d(assets.mesh_player_arm.clone()),
+            MeshMaterial3d(assets.mat_player_shirt.clone()),
+            Transform::from_xyz(0.36, 1.05, 0.0),
+        ))
+        .id();
+    let leg_l = commands
+        .spawn((
+            Mesh3d(assets.mesh_player_leg.clone()),
+            MeshMaterial3d(assets.mat_player_pants.clone()),
+            Transform::from_xyz(-0.14, 0.35, 0.0),
+        ))
+        .id();
+    let leg_r = commands
+        .spawn((
+            Mesh3d(assets.mesh_player_leg.clone()),
+            MeshMaterial3d(assets.mat_player_pants.clone()),
+            Transform::from_xyz(0.14, 0.35, 0.0),
+        ))
+        .id();
+    let torso = commands
+        .spawn((
+            Mesh3d(assets.mesh_player_torso.clone()),
+            MeshMaterial3d(assets.mat_player_shirt.clone()),
+            Transform::from_xyz(0.0, 1.05, 0.0),
+        ))
+        .id();
+    let head = commands
+        .spawn((
+            Mesh3d(assets.mesh_player_head.clone()),
+            MeshMaterial3d(assets.mat_player_skin.clone()),
+            Transform::from_xyz(0.0, 1.6, 0.0),
+        ))
+        .id();
+
+    let ped_root = commands
+        .spawn((
+            Transform::from_translation(pos).with_rotation(Quat::from_rotation_y(rot_y)),
+            Visibility::Visible,
+            Pedestrian {
+                speed: 1.0 + rng.gen::<f32>() * 0.7,
+                phase: rng.gen::<f32>() * 2.0 * PI,
+                change_in: 2.0 + rng.gen::<f32>() * 5.0,
+                hp: config.weapons.ped_hp,
+                pos,
+                knockback: Vec3::ZERO,
+            },
+            PedLimbs {
+                arm_l,
+                arm_r,
+                leg_l,
+                leg_r,
+            },
+        ))
+        .id();
+
+    commands
+        .entity(ped_root)
+        .add_children(&[torso, head, arm_l, arm_r, leg_l, leg_r]);
+}
+
+pub fn spawn_peds(mut commands: Commands, assets: Res<GameAssets>, config: Res<GameConfig>) {
     let mut rng = rand::thread_rng();
+    for _ in 0..PED_COUNT {
+        let (pos, rot_y) = random_ped_pose(&mut rng);
+        spawn_one_ped(&mut commands, &assets, &config, pos, rot_y, &mut rng);
+    }
+}
 
-    for _ in 0..22 {
-        let arm_l = commands
-            .spawn((
-                Mesh3d(assets.mesh_player_arm.clone()),
-                MeshMaterial3d(assets.mat_player_shirt.clone()),
-                Transform::from_xyz(-0.36, 1.05, 0.0),
-            ))
-            .id();
-        let arm_r = commands
-            .spawn((
-                Mesh3d(assets.mesh_player_arm.clone()),
-                MeshMaterial3d(assets.mat_player_shirt.clone()),
-                Transform::from_xyz(0.36, 1.05, 0.0),
-            ))
-            .id();
-        let leg_l = commands
-            .spawn((
-                Mesh3d(assets.mesh_player_leg.clone()),
-                MeshMaterial3d(assets.mat_player_pants.clone()),
-                Transform::from_xyz(-0.14, 0.35, 0.0),
-            ))
-            .id();
-        let leg_r = commands
-            .spawn((
-                Mesh3d(assets.mesh_player_leg.clone()),
-                MeshMaterial3d(assets.mat_player_pants.clone()),
-                Transform::from_xyz(0.14, 0.35, 0.0),
-            ))
-            .id();
-        let torso = commands
-            .spawn((
-                Mesh3d(assets.mesh_player_torso.clone()),
-                MeshMaterial3d(assets.mat_player_shirt.clone()),
-                Transform::from_xyz(0.0, 1.05, 0.0),
-            ))
-            .id();
-        let head = commands
-            .spawn((
-                Mesh3d(assets.mesh_player_head.clone()),
-                MeshMaterial3d(assets.mat_player_skin.clone()),
-                Transform::from_xyz(0.0, 1.6, 0.0),
-            ))
-            .id();
-
-        // Place on a sidewalk
-        let lane = rng.gen_range(0..=GRID);
-        let coord = -CITY_HALF + lane as f32 * STEP;
-        let along = -CITY_HALF + rng.gen::<f32>() * (CITY_HALF * 2.0);
-        let side_offset = (if rng.gen_bool(0.5) { -1.0 } else { 1.0 }) * (ROAD_W / 2.0 + 1.0);
-        let (pos, rot_y) = if rng.gen_bool(0.5) {
-            (
-                Vec3::new(along, 0.3, coord + side_offset),
-                if rng.gen_bool(0.5) { 0.0 } else { PI },
-            )
-        } else {
-            (
-                Vec3::new(coord + side_offset, 0.3, along),
-                if rng.gen_bool(0.5) {
-                    PI / 2.0
-                } else {
-                    -PI / 2.0
-                },
-            )
-        };
-
-        let ped_root = commands
-            .spawn((
-                Transform::from_translation(pos).with_rotation(Quat::from_rotation_y(rot_y)),
-                Visibility::Visible,
-                Pedestrian {
-                    speed: 1.0 + rng.gen::<f32>() * 0.7,
-                    phase: rng.gen::<f32>() * 2.0 * PI,
-                    change_in: 2.0 + rng.gen::<f32>() * 5.0,
-                    pos,
-                    knockback: Vec3::ZERO,
-                },
-                PedLimbs {
-                    arm_l,
-                    arm_r,
-                    leg_l,
-                    leg_r,
-                },
-            ))
-            .id();
-
-        commands
-            .entity(ped_root)
-            .add_children(&[torso, head, arm_l, arm_r, leg_l, leg_r]);
+/// Respawn peds killed by the player so the city never empties out.
+/// New peds appear at least 30 m away, so they don't pop into view.
+pub fn keep_ped_population(
+    mut commands: Commands,
+    assets: Res<GameAssets>,
+    config: Res<GameConfig>,
+    game_state: Res<GameState>,
+    peds: Query<(), With<Pedestrian>>,
+    player_q: Query<&GlobalTransform, With<Player>>,
+) {
+    if !game_state.started {
+        return;
+    }
+    let missing = PED_COUNT.saturating_sub(peds.iter().count());
+    if missing == 0 {
+        return;
+    }
+    let player_pos = player_q
+        .get_single()
+        .map(|gt| gt.translation())
+        .unwrap_or(Vec3::ZERO);
+    let mut rng = rand::thread_rng();
+    // A couple per frame max; unlucky (too close) rolls retry next frame.
+    for _ in 0..missing.min(2) {
+        let (pos, rot_y) = random_ped_pose(&mut rng);
+        if pos.distance(player_pos) < 30.0 {
+            continue;
+        }
+        spawn_one_ped(&mut commands, &assets, &config, pos, rot_y, &mut rng);
     }
 }
 
@@ -155,7 +215,7 @@ pub fn update_peds(
 
         let fwd = transform.rotation * Vec3::new(0.0, 0.0, 1.0);
         transform.translation += fwd * ped.speed * dt;
-        // Apply punch knockback (written by `player_punch` system).
+        // Apply punch/bullet knockback (written by the combat systems).
         transform.translation += ped.knockback;
         ped.knockback = Vec3::ZERO;
         transform.translation.y = 0.3;
@@ -193,8 +253,8 @@ pub fn update_peds(
             t.rotation = Quat::from_rotation_x(arm_r_swing);
         }
 
-        // Sync `ped.pos` so `player_punch` (which cannot read Transform) can
-        // test punch distance using this cached value.
+        // Sync `ped.pos` so the combat systems can hit-test without reading
+        // Transform.
         ped.pos = transform.translation;
     }
 }

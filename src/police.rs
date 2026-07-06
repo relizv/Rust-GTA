@@ -19,6 +19,12 @@ use crate::resources::{GameAssets, GameState, CITY_HALF, GRID, ROAD_W, STEP};
 #[derive(Component)]
 pub struct PoliceCar;
 
+/// Cop car hit points — shot down by the player's pistol (`weapons.rs`).
+#[derive(Component)]
+pub struct PoliceHealth {
+    pub hp: f32,
+}
+
 /// Handles to the two roof lamps so `update_police` can swap their materials
 /// to make them flash alternately.
 #[derive(Component)]
@@ -191,6 +197,9 @@ fn spawn_police_car<R: Rng>(
             Transform::from_translation(pos).with_rotation(Quat::from_rotation_y(yaw)),
             Visibility::Visible,
             PoliceCar,
+            PoliceHealth {
+                hp: config.weapons.police_car_hp,
+            },
             PoliceLights {
                 red,
                 blue,

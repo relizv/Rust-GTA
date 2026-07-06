@@ -4,13 +4,17 @@ use bevy::prelude::*;
 use bevy::transform::components::GlobalTransform;
 
 use crate::car::Car;
+use crate::config::GameConfig;
 use crate::player::Player;
 use crate::resources::{GameState, InputState};
+use crate::weapons::WeaponState;
 
 pub fn update_camera(
     time: Res<Time>,
+    config: Res<GameConfig>,
     input_state: Res<InputState>,
     game_state: Res<GameState>,
+    weapon: Res<WeaponState>,
     // Use GlobalTransform (not Transform) so this read does not conflict with
     // `update_player`'s `&mut Transform` write on the player — Bevy 0.15 would
     // otherwise panic with B0001 even though both systems are in `.chain()`.
@@ -38,7 +42,13 @@ pub fn update_camera(
             + std::f32::consts::PI;
         (car_pos, car_yaw, 0.35, 9.0)
     } else {
-        (player_pos, input_state.yaw, input_state.pitch, 7.0)
+        // Aiming down sights pulls the camera in for an over-the-shoulder view.
+        let dist = if weapon.aiming {
+            config.weapons.aim_zoom_dist
+        } else {
+            7.0
+        };
+        (player_pos, input_state.yaw, input_state.pitch, dist)
     };
 
     let offset = Vec3::new(
