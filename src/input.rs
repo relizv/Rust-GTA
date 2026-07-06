@@ -43,31 +43,39 @@ pub fn capture_input(
             input_state.pitch = input_state.pitch.clamp(0.1, 1.2);
         }
     }
+
+    // --- Pause: while the settings menu is open, swallow all game input so
+    // clicking around the menu can't move the player or trigger F/E/R ---
+    if game_state.started && !input_state.cursor_locked {
+        *keys_pressed = KeysPressed::default();
+    }
 }
 
 pub fn manage_cursor_lock(
     mut windows: Query<&mut Window>,
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
     mut input_state: ResMut<InputState>,
     game_state: Res<GameState>,
+    mut virtual_time: ResMut<Time<Virtual>>,
 ) {
     let Ok(mut window) = windows.get_single_mut() else {
         return;
     };
 
-    if keys.just_pressed(KeyCode::Escape) {
-        input_state.cursor_locked = false;
-        window.cursor_options.visible = true;
-        window.cursor_options.grab_mode = CursorGrabMode::None;
-    }
-
-    if game_state.started
-        && mouse_buttons.just_pressed(MouseButton::Left)
-        && !input_state.cursor_locked
-    {
-        input_state.cursor_locked = true;
-        window.cursor_options.visible = false;
-        window.cursor_options.grab_mode = CursorGrabMode::Locked;
+    // ESC toggles the pause/settings menu once the game has started.
+    // Pausing freezes the VIRTUAL clock, so every dt-based system (movement,
+    // AI, police, day/night, timers) stops automatically — a real pause.
+    if keys.just_pressed(KeyCode::Escape) && game_state.started {
+        if input_state.cursor_locked {
+            input_state.cursor_locked = false;
+            window.cursor_options.visible = true;
+            window.cursor_options.grab_mode = CursorGrabMode::None;
+            virtual_time.pause();
+        } else {
+            input_state.cursor_locked = true;
+            window.cursor_options.visible = false;
+            window.cursor_options.grab_mode = CursorGrabMode::Locked;
+            virtual_time.unpause();
+        }
     }
 }

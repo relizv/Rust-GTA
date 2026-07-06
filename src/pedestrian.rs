@@ -134,6 +134,11 @@ pub fn update_peds(
     player_q: Query<&GlobalTransform, With<Player>>,
 ) {
     let dt = time.delta_secs();
+    // Paused (virtual clock frozen): the "step away from the player" nudge
+    // below isn't dt-scaled, so bail out to keep peds still in the pause menu.
+    if dt == 0.0 {
+        return;
+    }
     let player_pos = player_q
         .get_single()
         .map(|gt| gt.translation())

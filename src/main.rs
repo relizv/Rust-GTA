@@ -18,6 +18,7 @@ mod pedestrian;
 mod player;
 mod police;
 mod resources;
+mod settings;
 
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::pbr::{CascadeShadowConfigBuilder, DirectionalLightShadowMap};
@@ -103,6 +104,7 @@ fn main() {
                 player::update_wanted_decay,
                 daynight::update_day_night,
                 hud::update_hud,
+                settings::apply_graphics_settings,
             )
                 .chain(),
         )

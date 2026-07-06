@@ -14,6 +14,7 @@ Gameplay mirrors the JS version:
 - Police: cop cars with flashing red/blue light bars spawn at 1+ stars and chase you; if they corner you — busted (fine + respawn). Stars don't decay while a cop is near you
 - Day/night cycle (10-min day): moving sun, sunrise/sunset skies, windows glow and street lamps switch on at night; HUD clock
 - FPS counter (top-left) and a central config file (`src/config.rs`) with all gameplay/graphics tunables
+- Pause/settings menu on **ESC**: a true pause (the virtual clock freezes), live graphics & gameplay sliders, and a quit button
 
 ## Controls
 
@@ -75,6 +76,7 @@ mini-gta-rust/
     ├── car.rs          # Car spawn, AI navigation, player driving
     ├── pedestrian.rs   # Ped spawn + sidewalk AI
     ├── police.rs       # Cop cars: spawn on wanted, chase AI, flashing light bar
+    ├── settings.rs     # Applies pause-menu graphics changes to live engine state
     ├── camera.rs       # Smooth third-person follow camera
     └── hud.rs          # egui HUD (info, minimap, speedo, stars, start overlay)
 ```

@@ -301,6 +301,7 @@ fn animate_limb(
 pub fn player_punch(
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     config: Res<GameConfig>,
+    input_state: Res<InputState>,
     // Use GlobalTransform for the player position to avoid B0001 with
     // `update_player`'s `&mut Transform` write on the player.
     player_q: Query<(&GlobalTransform, &PlayerState), With<Player>>,
@@ -311,6 +312,10 @@ pub fn player_punch(
     // borrow, so we don't need a separate `Res<GameState>` (that caused B0002).
     mut game_state: ResMut<GameState>,
 ) {
+    // Ignore clicks while the pause menu is open — those are UI clicks.
+    if !input_state.cursor_locked {
+        return;
+    }
     if !mouse_buttons.just_pressed(MouseButton::Left) || game_state.in_vehicle.is_some() {
         return;
     }

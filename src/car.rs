@@ -163,6 +163,11 @@ pub fn update_ai_cars(
 ) {
     let mut rng = rand::thread_rng();
     let dt = time.delta_secs();
+    // Paused (virtual clock frozen): the AI's random turns are per-frame, not
+    // dt-scaled, so bail out to keep cars perfectly still in the pause menu.
+    if dt == 0.0 {
+        return;
+    }
     let player_pos = player_q
         .get_single()
         .map(|gt| gt.translation())

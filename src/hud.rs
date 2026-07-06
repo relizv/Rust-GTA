@@ -7,6 +7,7 @@
 //! - Center-top: toast notification
 //! - Center:    start overlay (when not started) + pause overlay (cursor unlocked)
 
+use bevy::app::AppExit;
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::transform::components::GlobalTransform;
@@ -25,8 +26,10 @@ use crate::resources::{GameState, InputState, CITY_HALF, GRID, STEP};
 pub fn update_hud(
     mut contexts: EguiContexts,
     diagnostics: Res<DiagnosticsStore>,
-    config: Res<GameConfig>,
-    day_night: Res<DayNight>,
+    mut config: ResMut<GameConfig>,
+    mut day_night: ResMut<DayNight>,
+    mut virtual_time: ResMut<Time<Virtual>>,
+    mut exit: EventWriter<AppExit>,
     mut game_state: ResMut<GameState>,
     mut input_state: ResMut<InputState>,
     mut windows: Query<&mut Window>,
@@ -76,7 +79,7 @@ pub fn update_hud(
                     ui.label(
                         egui::RichText::new(
                             "WASD — движение   |   Мышь — камера   |   SHIFT — бег   |   ПРОБЕЛ — прыжок\n\
-                             F — войти/выйти из машины   |   ЛКМ — удар   |   R — сброс позиции   |   ESC — отпустить курсор"
+                             F — войти/выйти из машины   |   ЛКМ — удар   |   R — сброс позиции   |   ESC — пауза и настройки"
                         )
                         .color(egui::Color32::from_rgb(200, 200, 200))
                         .size(13.0),
@@ -327,24 +330,140 @@ pub fn update_hud(
             });
     }
 
-    // ----- Pause overlay (cursor unlocked mid-game) -----
+    // ----- Pause + settings menu (ESC) -----
     if game_state.started && !input_state.cursor_locked {
+        // Dim the game behind the menu.
         egui::CentralPanel::default()
-            .frame(egui::Frame::none().fill(egui::Color32::from_black_alpha(180)))
+            .frame(egui::Frame::none().fill(egui::Color32::from_black_alpha(150)))
+            .show(ctx, |_ui| {});
+
+        let section = |ui: &mut egui::Ui, title: &str| {
+            ui.add_space(10.0);
+            ui.label(
+                egui::RichText::new(title)
+                    .color(egui::Color32::from_rgb(255, 204, 51))
+                    .size(13.0)
+                    .strong(),
+            );
+            ui.separator();
+        };
+
+        egui::Window::new("pause_menu")
+            .title_bar(false)
+            .resizable(false)
+            .collapsible(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .frame(
+                egui::Frame::popup(&ctx.style())
+                    .fill(egui::Color32::from_rgb(16, 16, 26))
+                    .stroke(egui::Stroke::new(
+                        1.0,
+                        egui::Color32::from_rgb(255, 204, 51),
+                    )),
+            )
             .show(ctx, |ui| {
+                ui.set_width(360.0);
                 ui.vertical_centered(|ui| {
-                    ui.add_space(200.0);
                     ui.heading(
                         egui::RichText::new("ПАУЗА")
                             .color(egui::Color32::from_rgb(255, 204, 51))
-                            .size(48.0)
+                            .size(30.0)
                             .strong(),
                     );
-                    ui.add_space(16.0);
+                });
+
+                egui::ScrollArea::vertical()
+                    .max_height(400.0)
+                    .show(ui, |ui| {
+                        section(ui, "ГРАФИКА");
+                        ui.checkbox(&mut config.graphics.fps_counter, "Счётчик FPS");
+                        ui.checkbox(&mut config.graphics.msaa, "Сглаживание (MSAA x4)");
+                        ui.checkbox(&mut config.graphics.vsync, "VSync");
+                        ui.checkbox(&mut config.graphics.shadows_enabled, "Тени");
+                        ui.add(
+                            egui::Slider::new(&mut config.graphics.shadow_distance, 40.0..=250.0)
+                                .text("Дальность теней, м"),
+                        );
+
+                        section(ui, "ДЕНЬ И НОЧЬ");
+                        ui.checkbox(&mut config.day_night.enabled, "Цикл дня и ночи");
+                        ui.add(
+                            egui::Slider::new(&mut day_night.hour, 0.0..=23.99)
+                                .text("Время суток, ч"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut config.day_night.day_length_secs, 60.0..=1800.0)
+                                .text("Длина суток, сек"),
+                        );
+
+                        section(ui, "ИГРОК");
+                        ui.add(
+                            egui::Slider::new(&mut config.world.gravity, 1.0..=40.0)
+                                .text("Гравитация (Луна = 3.7)"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut config.player.run_speed, 4.0..=25.0)
+                                .text("Скорость бега"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut config.player.jump_velocity, 3.0..=20.0)
+                                .text("Сила прыжка"),
+                        );
+
+                        section(ui, "МАШИНЫ");
+                        ui.add(
+                            egui::Slider::new(&mut config.driving.max_speed, 10.0..=60.0)
+                                .text("Макс. скорость"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut config.driving.accel, 6.0..=40.0).text("Разгон"),
+                        );
+
+                        section(ui, "ПОЛИЦИЯ");
+                        ui.add(
+                            egui::Slider::new(&mut config.police.chase_speed, 8.0..=30.0)
+                                .text("Скорость погони"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut config.police.max_cars, 1..=8)
+                                .text("Макс. машин копов"),
+                        );
+                    });
+
+                ui.add_space(14.0);
+                ui.vertical_centered_justified(|ui| {
+                    let resume = egui::Button::new(
+                        egui::RichText::new("▶  ПРОДОЛЖИТЬ")
+                            .color(egui::Color32::BLACK)
+                            .size(16.0)
+                            .strong(),
+                    )
+                    .fill(egui::Color32::from_rgb(255, 204, 51));
+                    if ui.add(resume).clicked() {
+                        if let Ok(mut window) = windows.get_single_mut() {
+                            input_state.cursor_locked = true;
+                            window.cursor_options.visible = false;
+                            window.cursor_options.grab_mode = CursorGrabMode::Locked;
+                        }
+                        virtual_time.unpause();
+                    }
+                    ui.add_space(6.0);
+                    let quit = egui::Button::new(
+                        egui::RichText::new("Выйти из игры")
+                            .color(egui::Color32::WHITE)
+                            .size(14.0),
+                    )
+                    .fill(egui::Color32::from_rgb(120, 30, 30));
+                    if ui.add(quit).clicked() {
+                        exit.send(AppExit::Success);
+                    }
+                });
+                ui.add_space(4.0);
+                ui.vertical_centered(|ui| {
                     ui.label(
-                        egui::RichText::new("Кликни в окно, чтобы продолжить")
-                            .color(egui::Color32::from_rgb(200, 200, 200))
-                            .size(16.0),
+                        egui::RichText::new("ESC — вернуться в игру")
+                            .color(egui::Color32::from_rgb(140, 140, 150))
+                            .size(11.0),
                     );
                 });
             });
