@@ -84,6 +84,30 @@ pub struct CameraConfig {
     /// Third-person camera distance, meters. Aiming uses
     /// `weapons.aim_zoom_dist` instead.
     pub distance: f32,
+
+    // ----- In-vehicle camera -----
+    /// Camera distance while driving, meters.
+    pub car_distance: f32,
+    /// Camera height above the car, meters.
+    pub car_height: f32,
+    /// Resting pitch the in-car camera drifts back to, radians.
+    pub car_pitch: f32,
+    /// Seconds of no mouse movement before the in-car camera starts drifting
+    /// back behind the car. Set very high to disable auto-recenter entirely.
+    pub car_recenter_delay: f32,
+    /// How fast the in-car camera swings back behind the car, 1/s.
+    /// Higher = snappier. 3.0 takes roughly a second for a 180° swing.
+    pub car_recenter_rate: f32,
+
+    // ----- Over-the-shoulder aiming (GTA V style) -----
+    /// How far right the camera slides when aiming down sights, meters.
+    /// Negative values put the camera over the LEFT shoulder.
+    pub aim_shoulder_offset: f32,
+    /// How fast the shoulder offset blends in/out, 1/s.
+    pub aim_shoulder_lerp: f32,
+    /// Extra look-at height while aiming, meters — raises the sightline from
+    /// the chest toward the shoulder so the crosshair clears the character.
+    pub aim_look_height: f32,
 }
 
 impl Default for CameraConfig {
@@ -94,6 +118,16 @@ impl Default for CameraConfig {
             pitch_max: 1.35,
             min_height: 0.5,
             distance: 7.0,
+
+            car_distance: 9.0,
+            car_height: 3.0,
+            car_pitch: 0.35,
+            car_recenter_delay: 1.5,
+            car_recenter_rate: 3.0,
+
+            aim_shoulder_offset: 0.9,
+            aim_shoulder_lerp: 9.0,
+            aim_look_height: 0.35,
         }
     }
 }
