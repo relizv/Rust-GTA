@@ -16,6 +16,7 @@ use bevy::prelude::*;
 #[derive(Resource, Clone, Default)]
 pub struct GameConfig {
     pub graphics: GraphicsConfig,
+    pub camera: CameraConfig,
     pub world: WorldConfig,
     pub player: PlayerConfig,
     pub driving: DrivingConfig,
@@ -59,6 +60,40 @@ impl Default for GraphicsConfig {
             fps_counter: true,
             window_width: 1280.0,
             window_height: 720.0,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct CameraConfig {
+    /// Mouse look sensitivity, radians per pixel of mouse movement.
+    pub mouse_sensitivity: f32,
+    /// Lowest camera pitch, radians.
+    ///
+    /// The camera orbits the player at `offset.y = pitch.sin() * distance`,
+    /// so a POSITIVE pitch lifts the camera above the player and looks down,
+    /// and a NEGATIVE pitch drops it below the player and looks UP at the sky.
+    /// -0.6 rad ≈ 34° above the horizon.
+    pub pitch_min: f32,
+    /// Highest camera pitch, radians. 1.35 rad ≈ 77°, just short of a full
+    /// top-down view (at exactly π/2 the `look_at` up-vector degenerates).
+    pub pitch_max: f32,
+    /// The camera never drops below this height above the target, meters.
+    /// Without it, looking up would push the camera through the pavement.
+    pub min_height: f32,
+    /// Third-person camera distance, meters. Aiming uses
+    /// `weapons.aim_zoom_dist` instead.
+    pub distance: f32,
+}
+
+impl Default for CameraConfig {
+    fn default() -> Self {
+        Self {
+            mouse_sensitivity: 0.003,
+            pitch_min: -0.6,
+            pitch_max: 1.35,
+            min_height: 0.5,
+            distance: 7.0,
         }
     }
 }
@@ -185,7 +220,7 @@ pub struct WeaponConfig {
     pub hip_spread_deg: f32,
     /// Bullet spread while aiming (hold RMB), degrees.
     pub aim_spread_deg: f32,
-    /// Camera distance while aiming (normal third-person is 7).
+    /// Camera distance while aiming (normal third-person is `camera.distance`).
     pub aim_zoom_dist: f32,
     /// Pedestrian health (two default bullets = down).
     pub ped_hp: f32,
