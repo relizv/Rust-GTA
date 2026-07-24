@@ -43,9 +43,9 @@ pub fn update_camera(
     player_q: Query<&GlobalTransform, With<Player>>,
     cars: Query<&GlobalTransform, With<Car>>,
     mut camera_q: Query<&mut Transform, With<Camera>>,
-    /// Seconds since the player last moved the mouse.
+    // Seconds since the player last moved the mouse.
     mut look_idle: Local<f32>,
-    /// Smoothed 0..1 blend of the over-the-shoulder aim offset.
+    // Smoothed 0..1 blend of the over-the-shoulder aim offset.
     mut shoulder_blend: Local<f32>,
 ) {
     let dt = time.delta_secs();
