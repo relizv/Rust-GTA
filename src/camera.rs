@@ -46,7 +46,7 @@ pub fn update_camera(
         let dist = if weapon.aiming {
             config.weapons.aim_zoom_dist
         } else {
-            7.0
+            config.camera.distance
         };
         (player_pos, input_state.yaw, input_state.pitch, dist)
     };
@@ -62,7 +62,14 @@ pub fn update_camera(
     } else {
         1.8
     };
-    let desired = target + Vec3::new(0.0, height, 0.0) + offset;
+    let mut desired = target + Vec3::new(0.0, height, 0.0) + offset;
+
+    // A negative pitch (looking up) swings the camera downward — clamp it so
+    // it never sinks through the pavement behind the player.
+    let floor = target.y + config.camera.min_height;
+    if desired.y < floor {
+        desired.y = floor;
+    }
 
     let t = 1.0 - (-12.0 * time.delta_secs()).exp();
     camera_t.translation = camera_t.translation.lerp(desired, t);

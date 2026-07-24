@@ -4,11 +4,13 @@ use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use bevy::window::CursorGrabMode;
 
+use crate::config::GameConfig;
 use crate::resources::{GameState, InputState, KeysPressed};
 
 pub fn capture_input(
     keys: Res<ButtonInput<KeyCode>>,
     mut mouse_motion: EventReader<MouseMotion>,
+    config: Res<GameConfig>,
     mut input_state: ResMut<InputState>,
     mut keys_pressed: ResMut<KeysPressed>,
     game_state: Res<GameState>,
@@ -36,11 +38,17 @@ pub fn capture_input(
     keys_pressed.space = keys.pressed(KeyCode::Space);
 
     // --- Mouse look (only when game has started and cursor is locked) ---
+    //
+    // Pitch limits come from `config.camera`. Negative pitch drops the camera
+    // below the player so you can look UP at the sky / rooftops; positive
+    // pitch lifts it for a look-down view. See `CameraConfig` for details.
     if game_state.started && input_state.cursor_locked {
+        let sens = config.camera.mouse_sensitivity;
+        let (pitch_min, pitch_max) = (config.camera.pitch_min, config.camera.pitch_max);
         for ev in mouse_motion.read() {
-            input_state.yaw -= ev.delta.x * 0.003;
-            input_state.pitch -= ev.delta.y * 0.003;
-            input_state.pitch = input_state.pitch.clamp(0.1, 1.2);
+            input_state.yaw -= ev.delta.x * sens;
+            input_state.pitch -= ev.delta.y * sens;
+            input_state.pitch = input_state.pitch.clamp(pitch_min, pitch_max);
         }
     }
 
