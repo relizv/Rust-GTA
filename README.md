@@ -71,6 +71,7 @@ mini-gta-rust/
 └── src/
     ├── main.rs         # App entry: plugins, lights, fog, cascade shadows
     ├── config.rs       # ALL gameplay/graphics tunables in one place
+    ├── util.rs         # lerp / lerp_angle / frame-rate independent damp
     ├── daynight.rs     # Day/night cycle: sun, sky, night windows, street lamps
     ├── resources.rs    # Constants, GameState, InputState, GameAssets
     ├── input.rs        # Keyboard/mouse capture, pointer lock
@@ -105,9 +106,10 @@ This codebase targets Bevy 0.15. Key API differences from older versions that ar
 
 - **Pedestrian clothing colors are shared** with the player's. To restore per-ped variety, add an `Assets<StandardMaterial>` parameter to `spawn_peds` and create per-ped materials.
 - **No audio** (Bevy has `bevy_audio` if you want engine/siren sounds).
-- **AI cars don't avoid each other** — they can clip through one another at intersections.
+- **AI cars only keep to their own lane** (right-hand traffic) — they don't brake for each other, so they can still clip through one another at intersections or when a faster car catches a slower one.
+- **Cops drive straight at you** (no road pathfinding), so a building between you and them can hold them up.
 - **No save/load** of game state.
 
 ## License
 
-MIT — do whatever you want with this code.
+Apache-2.0 — see [LICENSE](LICENSE).
