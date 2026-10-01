@@ -157,6 +157,9 @@ pub struct PlayerConfig {
     pub punch_range: f32,
     /// Cash for each ped hit.
     pub cash_per_punch: i32,
+    /// Beating up pedestrians draws the cops: wanted level is raised to at
+    /// least this many stars (0 = punching is consequence-free).
+    pub punch_wanted: u32,
     /// HP regained per second while no cop has hold of you.
     pub hp_regen_per_sec: f32,
 }
@@ -169,6 +172,7 @@ impl Default for PlayerConfig {
             jump_velocity: 7.5,
             punch_range: 1.4,
             cash_per_punch: 5,
+            punch_wanted: 1,
             hp_regen_per_sec: 3.0,
         }
     }

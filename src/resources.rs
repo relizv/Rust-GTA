@@ -47,6 +47,13 @@ impl GameState {
         self.toast = Some((msg.into(), 1.8));
     }
 
+    /// Make sure the wanted level is at least `n` (never lowers it, never
+    /// stacks) and restart the decay timer.
+    pub fn raise_wanted_to(&mut self, n: u32) {
+        self.wanted = self.wanted.max(n).min(5);
+        self.wanted_decay_timer = 0.0;
+    }
+
     pub fn add_wanted(&mut self, n: u32) {
         self.wanted = (self.wanted + n).min(5);
         self.wanted_decay_timer = 0.0;
@@ -337,4 +344,22 @@ pub fn setup_game_assets(
         mat_tracer,
         mat_explosion,
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn raise_wanted_to_never_stacks_or_lowers() {
+        let mut g = GameState::default();
+        g.raise_wanted_to(1);
+        g.raise_wanted_to(1);
+        assert_eq!(g.wanted, 1);
+        g.wanted = 3;
+        g.wanted_decay_timer = 9.0;
+        g.raise_wanted_to(1);
+        assert_eq!(g.wanted, 3);
+        assert_eq!(g.wanted_decay_timer, 0.0);
+    }
 }

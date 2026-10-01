@@ -368,6 +368,9 @@ pub fn player_punch(
     }
     if hit_count > 0 {
         game_state.cash += config.player.cash_per_punch * hit_count;
+        if config.player.punch_wanted > 0 {
+            game_state.raise_wanted_to(config.player.punch_wanted);
+        }
         game_state.show_toast(format!("+${}", config.player.cash_per_punch * hit_count));
     }
 }
