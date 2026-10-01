@@ -14,6 +14,7 @@ use std::f32::consts::PI;
 use crate::config::GameConfig;
 use crate::player::Player;
 use crate::resources::{GameAssets, GameState, CITY_HALF, GRID, ROAD_W, STEP};
+use crate::util::lerp;
 
 /// How many peds should be walking around at any time.
 pub const PED_COUNT: usize = 22;
@@ -286,8 +287,4 @@ fn pull_to_sidewalk(pos: &mut Vec3) {
         let side = if pos.z > best_coord { 1.0 } else { -1.0 };
         pos.z = lerp(pos.z, best_coord + side * offset, 0.05);
     }
-}
-
-fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    a + (b - a) * t
 }

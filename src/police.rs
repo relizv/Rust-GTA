@@ -8,13 +8,14 @@ use bevy::pbr::NotShadowCaster;
 use bevy::prelude::*;
 use bevy::transform::components::GlobalTransform;
 use rand::Rng;
-use std::f32::consts::{FRAC_PI_2, PI};
+use std::f32::consts::FRAC_PI_2;
 
 use crate::car::collides_buildings_at;
 use crate::city::Building;
 use crate::config::GameConfig;
 use crate::player::Player;
 use crate::resources::{GameAssets, GameState, CITY_HALF, GRID, ROAD_W, STEP};
+use crate::util::lerp_angle;
 
 #[derive(Component)]
 pub struct PoliceCar;
@@ -315,15 +316,4 @@ pub fn update_police(
         player_tf.translation = Vec3::new(0.0, 0.0, ROAD_W + 2.0);
         game_state.show_toast(format!("🚔 ЗАДЕРЖАН! Штраф ${}", fine));
     }
-}
-
-fn lerp_angle(a: f32, b: f32, t: f32) -> f32 {
-    let mut diff = b - a;
-    while diff > PI {
-        diff -= 2.0 * PI;
-    }
-    while diff < -PI {
-        diff += 2.0 * PI;
-    }
-    a + diff * t
 }

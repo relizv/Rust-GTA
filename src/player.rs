@@ -4,13 +4,13 @@ use bevy::input::mouse::MouseButton;
 use bevy::input::ButtonInput;
 use bevy::prelude::*;
 use bevy::transform::components::GlobalTransform;
-use std::f32::consts::PI;
 
 use crate::car::Car;
 use crate::config::GameConfig;
 use crate::pedestrian::Pedestrian;
 use crate::police::PoliceCar;
 use crate::resources::{GameAssets, GameState, InputState, KeysPressed, CITY_HALF, ROAD_W};
+use crate::util::{lerp, lerp_angle};
 use crate::weapons::{PistolMesh, WeaponState};
 
 #[derive(Component)]
@@ -396,21 +396,6 @@ pub fn update_wanted_decay(
             game_state.wanted_decay_timer = 0.0;
         }
     }
-}
-
-fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    a + (b - a) * t
-}
-
-fn lerp_angle(a: f32, b: f32, t: f32) -> f32 {
-    let mut diff = b - a;
-    while diff > PI {
-        diff -= 2.0 * PI;
-    }
-    while diff < -PI {
-        diff += 2.0 * PI;
-    }
-    a + diff * t
 }
 
 fn collide_buildings(pos: &mut Vec3, radius: f32, buildings: &Query<&crate::city::Building>) {

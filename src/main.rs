@@ -19,6 +19,7 @@ mod player;
 mod police;
 mod resources;
 mod settings;
+mod util;
 mod weapons;
 
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
