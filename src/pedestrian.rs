@@ -14,10 +14,16 @@ use std::f32::consts::PI;
 use crate::config::GameConfig;
 use crate::player::Player;
 use crate::resources::{GameAssets, GameState, CITY_HALF, GRID, ROAD_W, STEP};
-use crate::util::lerp;
+use crate::util::{damp, lerp};
 
 /// How many peds should be walking around at any time.
 pub const PED_COUNT: usize = 22;
+
+/// How fast a ped steps aside when the player walks into them, m/s.
+const PED_AVOID_SPEED: f32 = 6.0;
+/// How fast peds drift back onto the sidewalk, 1/s (the old per-frame 0.05
+/// at 60 FPS).
+const SIDEWALK_PULL_RATE: f32 = 3.1;
 
 #[derive(Component)]
 pub struct Pedestrian {
@@ -221,7 +227,7 @@ pub fn update_peds(
         ped.knockback = Vec3::ZERO;
         transform.translation.y = 0.3;
 
-        pull_to_sidewalk(&mut transform.translation);
+        pull_to_sidewalk(&mut transform.translation, dt);
 
         let lim = CITY_HALF + 4.0;
         transform.translation.x = transform.translation.x.clamp(-lim, lim);
@@ -232,7 +238,7 @@ pub fn update_peds(
             let mut away = transform.translation - player_pos;
             away.y = 0.0;
             away = away.normalize_or_zero();
-            transform.translation += away * 0.1;
+            transform.translation += away * PED_AVOID_SPEED * dt;
         }
 
         // Animate
@@ -260,7 +266,8 @@ pub fn update_peds(
     }
 }
 
-fn pull_to_sidewalk(pos: &mut Vec3) {
+fn pull_to_sidewalk(pos: &mut Vec3, dt: f32) {
+    let pull = damp(SIDEWALK_PULL_RATE, dt);
     let mut best_axis: Option<&str> = None;
     let mut best_coord = 0.0;
     let mut best_dist = f32::MAX;
@@ -282,9 +289,9 @@ fn pull_to_sidewalk(pos: &mut Vec3) {
     let offset = ROAD_W / 2.0 + 1.2;
     if best_axis == Some("x") {
         let side = if pos.x > best_coord { 1.0 } else { -1.0 };
-        pos.x = lerp(pos.x, best_coord + side * offset, 0.05);
+        pos.x = lerp(pos.x, best_coord + side * offset, pull);
     } else if best_axis == Some("z") {
         let side = if pos.z > best_coord { 1.0 } else { -1.0 };
-        pos.z = lerp(pos.z, best_coord + side * offset, 0.05);
+        pos.z = lerp(pos.z, best_coord + side * offset, pull);
     }
 }

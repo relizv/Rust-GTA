@@ -10,8 +10,16 @@ use crate::config::GameConfig;
 use crate::pedestrian::Pedestrian;
 use crate::police::PoliceCar;
 use crate::resources::{GameAssets, GameState, InputState, KeysPressed, CITY_HALF, ROAD_W};
-use crate::util::{lerp, lerp_angle};
+use crate::util::{damp, lerp, lerp_angle};
 use crate::weapons::{PistolMesh, WeaponState};
+
+// Smoothing rates, 1/s. They reproduce the old hard-coded per-frame factors
+// (0.2, 0.18, 0.8, 0.2) at 60 FPS — `-ln(1 - factor) * 60` — but, unlike
+// those, behave identically at any frame rate.
+const MOVE_ACCEL_RATE: f32 = 13.4;
+const TURN_RATE: f32 = 11.9;
+const FRICTION_RATE: f32 = 13.4;
+const LIMB_SETTLE_RATE: f32 = 13.4;
 
 #[derive(Component)]
 pub struct Player;
@@ -247,24 +255,27 @@ pub fn update_player(
         config.player.walk_speed
     };
 
+    let dt = time.delta_secs();
     if move_vec.length_squared() > 0.0 {
         move_vec = move_vec.normalize() * speed;
-        state.vel.x = lerp(state.vel.x, move_vec.x, 0.2);
-        state.vel.z = lerp(state.vel.z, move_vec.z, 0.2);
+        let accel = damp(MOVE_ACCEL_RATE, dt);
+        state.vel.x = lerp(state.vel.x, move_vec.x, accel);
+        state.vel.z = lerp(state.vel.z, move_vec.z, accel);
         let target_yaw = move_vec.x.atan2(move_vec.z);
-        state.yaw = lerp_angle(state.yaw, target_yaw, 0.18);
+        state.yaw = lerp_angle(state.yaw, target_yaw, damp(TURN_RATE, dt));
     } else {
-        state.vel.x *= 0.8;
-        state.vel.z *= 0.8;
+        let keep = 1.0 - damp(FRICTION_RATE, dt);
+        state.vel.x *= keep;
+        state.vel.z *= keep;
     }
 
     if keys.space && state.on_ground {
         state.vel.y = config.player.jump_velocity;
         state.on_ground = false;
     }
-    state.vel.y -= config.world.gravity * time.delta_secs();
+    state.vel.y -= config.world.gravity * dt;
 
-    transform.translation += state.vel * time.delta_secs();
+    transform.translation += state.vel * dt;
     if transform.translation.y <= 0.0 {
         transform.translation.y = 0.0;
         state.vel.y = 0.0;
@@ -282,17 +293,17 @@ pub fn update_player(
     // --- Animate limbs ---
     let speed2 = state.vel.x.hypot(state.vel.z);
     let t = time.elapsed_secs() * if keys.shift { 1.6 } else { 1.0 };
-    animate_limb(&mut limb_q, limbs.arm_l, speed2, t, 0.5, true);
-    animate_limb(&mut limb_q, limbs.arm_r, speed2, t, 0.5, false);
-    animate_limb(&mut limb_q, limbs.leg_l, speed2, t, 0.7, true);
-    animate_limb(&mut limb_q, limbs.leg_r, speed2, t, 0.7, false);
+    let settle = damp(LIMB_SETTLE_RATE, dt);
+    animate_limb(&mut limb_q, limbs.arm_l, (speed2, t, settle), 0.5, true);
+    animate_limb(&mut limb_q, limbs.arm_r, (speed2, t, settle), 0.5, false);
+    animate_limb(&mut limb_q, limbs.leg_l, (speed2, t, settle), 0.7, true);
+    animate_limb(&mut limb_q, limbs.leg_r, (speed2, t, settle), 0.7, false);
 }
 
 fn animate_limb(
     q: &mut Query<&mut Transform, With<PlayerLimb>>,
     entity: Entity,
-    speed: f32,
-    t: f32,
+    (speed, t, settle): (f32, f32, f32),
     amp: f32,
     invert: bool,
 ) {
@@ -301,7 +312,7 @@ fn animate_limb(
             let s = if invert { 1.0 } else { -1.0 };
             tr.rotation = Quat::from_rotation_x((t * 12.0).sin() * amp * s);
         } else {
-            tr.rotation = Quat::slerp(tr.rotation, Quat::IDENTITY, 0.2);
+            tr.rotation = Quat::slerp(tr.rotation, Quat::IDENTITY, settle);
         }
     }
 }
