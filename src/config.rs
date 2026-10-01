@@ -175,8 +175,16 @@ impl Default for PlayerConfig {
 pub struct DrivingConfig {
     /// Max speed of a player-driven car, m/s.
     pub max_speed: f32,
-    /// Acceleration / brake rate, m/s².
+    /// Acceleration rate, m/s².
     pub accel: f32,
+    /// Braking rate (pedal pushed against the direction of travel), m/s².
+    /// Stronger than `accel`, so the car actually stops.
+    pub brake: f32,
+    /// Engine braking / air drag when no pedal is pressed, 1/s. The car
+    /// coasts to a halt instead of holding (or gaining) speed.
+    pub drag: f32,
+    /// Max reverse speed, m/s.
+    pub reverse_speed: f32,
     /// Steering rate, rad/s at full speed factor.
     pub steer_rate: f32,
 }
@@ -186,6 +194,9 @@ impl Default for DrivingConfig {
         Self {
             max_speed: 28.0,
             accel: 18.0,
+            brake: 34.0,
+            drag: 1.4,
+            reverse_speed: 10.0,
             steer_rate: 1.6,
         }
     }

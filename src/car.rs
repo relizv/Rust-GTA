@@ -4,14 +4,18 @@ use bevy::prelude::*;
 use rand::Rng;
 
 use crate::city::Building;
-use crate::config::GameConfig;
+use crate::config::{DrivingConfig, GameConfig};
 use crate::resources::{GameAssets, GameState, KeysPressed, CITY_HALF, GRID, STEP};
 
 #[derive(Component)]
 pub struct Car {
     pub axis: Axis,
     pub dir: f32,
+    /// Cruising speed of the AI driver, m/s. Never touched by the player.
     pub speed: f32,
+    /// Signed forward speed while a human drives the car, m/s
+    /// (negative = reversing). Independent of the wheel visuals.
+    pub velocity: f32,
     pub color_idx: usize,
 }
 
@@ -27,7 +31,9 @@ pub struct CarWheels {
     pub fr: Entity,
     pub rl: Entity,
     pub rr: Entity,
-    pub spin: f32,
+    /// Visual rolling angle of the wheels, radians (kept in `0..TAU`).
+    /// Purely cosmetic — it must never feed back into the car's speed.
+    pub angle: f32,
 }
 
 pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
@@ -126,6 +132,7 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
                     axis,
                     dir,
                     speed: 6.0 + rng.gen::<f32>() * 6.0,
+                    velocity: 0.0,
                     color_idx,
                 },
                 CarWheels {
@@ -133,7 +140,7 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
                     fr: wheel_entities[1],
                     rl: wheel_entities[2],
                     rr: wheel_entities[3],
-                    spin: 0.0,
+                    angle: 0.0,
                 },
             ))
             .id();
@@ -178,18 +185,8 @@ pub fn update_ai_cars(
 
         if driven {
             // ----- Player driving -----
-            let max_speed = config.driving.max_speed;
-            if keys.w {
-                wheels.spin += config.driving.accel * dt;
-            } else if keys.s {
-                wheels.spin -= config.driving.accel * dt;
-            } else {
-                wheels.spin *= (1.0 - 1.4 * dt).max(0.0);
-                if wheels.spin.abs() < 0.05 {
-                    wheels.spin = 0.0;
-                }
-            }
-            wheels.spin = wheels.spin.clamp(-10.0, max_speed);
+            let throttle = f32::from(keys.w) - f32::from(keys.s);
+            car.velocity = step_drive_speed(car.velocity, throttle, dt, &config.driving);
 
             let mut steer = 0.0;
             if keys.a {
@@ -198,17 +195,18 @@ pub fn update_ai_cars(
             if keys.d {
                 steer += 1.0;
             }
-            let speed_factor = (wheels.spin.abs() / 6.0).min(1.0);
+            let speed_factor = (car.velocity.abs() / 6.0).min(1.0);
             let yaw_delta =
-                steer * config.driving.steer_rate * dt * speed_factor * wheels.spin.signum();
+                steer * config.driving.steer_rate * dt * speed_factor * car.velocity.signum();
             let new_yaw = transform.rotation.to_euler(EulerRot::YXZ).0 + yaw_delta;
             transform.rotation = Quat::from_rotation_y(new_yaw);
 
             let fwd = transform.rotation * Vec3::new(0.0, 0.0, 1.0);
-            let next = transform.translation + fwd * wheels.spin * dt;
+            let next = transform.translation + fwd * car.velocity * dt;
 
             if collides_buildings_at(next.x, next.z, 1.5, &buildings) {
-                wheels.spin *= -0.3;
+                // Bounce off the wall; drag then brings the car to a stop.
+                car.velocity *= -0.3;
             } else {
                 transform.translation = next;
             }
@@ -219,14 +217,9 @@ pub fn update_ai_cars(
             transform.translation.z = transform.translation.z.clamp(-lim, lim);
 
             // Update HUD speedometer (m/s → km/h)
-            game_state.last_speed_kmh = (wheels.spin.abs() * 3.6).round();
+            game_state.last_speed_kmh = (car.velocity.abs() * 3.6).round();
 
-            // Apply wheel spin visually.
-            // Read `wheels.spin * dt` before the mutable borrow of `wheels`.
-            let spin_delta = wheels.spin * dt;
-            apply_wheel_spin(&mut wheels, &mut wheel_transforms, spin_delta);
-
-            car.speed = wheels.spin;
+            roll_wheels(&mut wheels, &mut wheel_transforms, car.velocity * dt);
             continue;
         }
 
@@ -272,7 +265,11 @@ pub fn update_ai_cars(
             }
         }
 
-        apply_wheel_spin(&mut wheels, &mut wheel_transforms, delta);
+        roll_wheels(
+            &mut wheels,
+            &mut wheel_transforms,
+            car.speed * speed_scale * dt,
+        );
 
         // Random turn at intersection
         if rng.gen_bool(0.006) {
@@ -301,22 +298,43 @@ pub fn update_ai_cars(
     }
 }
 
-/// Update each wheel's local rotation = base_z_rotation * spin_y_rotation.
-/// Note: we copy Entity IDs out first to avoid the simultaneous
-/// `&mut wheels` (for `wheels.spin`) and `&wheels.fl/fr/...` borrow.
-fn apply_wheel_spin(
+/// Radius of the wheel mesh (see `Cylinder::new(0.35, ..)` in `resources.rs`).
+const WHEEL_RADIUS: f32 = 0.35;
+
+/// One integration step of a player-driven car's forward speed.
+///
+/// * `throttle`: `+1` gas, `-1` brake/reverse, `0` coast.
+/// * Pushing the pedal against the direction of travel brakes harder than
+///   accelerating (`brake` vs `accel`), and carries on into reverse.
+/// * With no pedal the car loses speed to `drag` and finally stops.
+pub fn step_drive_speed(speed: f32, throttle: f32, dt: f32, cfg: &DrivingConfig) -> f32 {
+    let mut v = speed;
+    if throttle != 0.0 {
+        let braking = v * throttle < 0.0;
+        let rate = if braking { cfg.brake } else { cfg.accel };
+        v += throttle * rate * dt;
+    } else {
+        v *= (1.0 - cfg.drag * dt).max(0.0);
+        if v.abs() < 0.3 {
+            v = 0.0;
+        }
+    }
+    v.clamp(-cfg.reverse_speed, cfg.max_speed)
+}
+
+/// Roll all four wheels by `distance` metres travelled along the car's
+/// heading. Keeps `CarWheels::angle` separate from the car's speed.
+fn roll_wheels(
     wheels: &mut CarWheels,
     transforms: &mut Query<&mut Transform, Without<Car>>,
-    delta: f32,
+    distance: f32,
 ) {
-    wheels.spin += delta * 2.0;
-    let spin_value = wheels.spin;
-    let ents = [wheels.fl, wheels.fr, wheels.rl, wheels.rr];
-
+    // The wheel mesh is a cylinder rotated onto its side; its local Y axis
+    // points along world -X, so rolling forward = decreasing angle.
+    wheels.angle = (wheels.angle - distance / WHEEL_RADIUS).rem_euclid(std::f32::consts::TAU);
     let base = Quat::from_rotation_z(std::f32::consts::PI / 2.0);
-    let spin = Quat::from_rotation_y(spin_value);
-    let final_rot = base * spin;
-    for e in ents {
+    let final_rot = base * Quat::from_rotation_y(wheels.angle);
+    for e in [wheels.fl, wheels.fr, wheels.rl, wheels.rr] {
         if let Ok(mut t) = transforms.get_mut(e) {
             t.rotation = final_rot;
         }
@@ -332,4 +350,57 @@ pub fn collides_buildings_at(x: f32, z: f32, radius: f32, buildings: &Query<&Bui
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const DT: f32 = 1.0 / 60.0;
+
+    fn run(mut v: f32, throttle: f32, secs: f32) -> f32 {
+        let cfg = DrivingConfig::default();
+        for _ in 0..(secs / DT) as usize {
+            v = step_drive_speed(v, throttle, DT, &cfg);
+        }
+        v
+    }
+
+    #[test]
+    fn gas_reaches_but_never_exceeds_max_speed() {
+        let cfg = DrivingConfig::default();
+        assert_eq!(run(0.0, 1.0, 10.0), cfg.max_speed);
+    }
+
+    #[test]
+    fn releasing_gas_slows_the_car_down_to_a_stop() {
+        let cfg = DrivingConfig::default();
+        let mut v = cfg.max_speed;
+        let mut prev = v;
+        for _ in 0..(15.0 / DT) as usize {
+            v = step_drive_speed(v, 0.0, DT, &cfg);
+            assert!(v <= prev, "speed must never grow while coasting");
+            prev = v;
+        }
+        assert_eq!(v, 0.0);
+    }
+
+    #[test]
+    fn braking_stops_faster_than_coasting() {
+        let cfg = DrivingConfig::default();
+        let braked = run(cfg.max_speed, -1.0, 0.5);
+        let coasted = run(cfg.max_speed, 0.0, 0.5);
+        assert!(braked < coasted, "{braked} !< {coasted}");
+    }
+
+    #[test]
+    fn holding_brake_ends_in_reverse_capped_at_reverse_speed() {
+        let cfg = DrivingConfig::default();
+        assert_eq!(run(cfg.max_speed, -1.0, 10.0), -cfg.reverse_speed);
+    }
+
+    #[test]
+    fn standing_car_stays_put() {
+        assert_eq!(run(0.0, 0.0, 5.0), 0.0);
+    }
 }
