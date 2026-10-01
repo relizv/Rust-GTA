@@ -6,6 +6,7 @@ use rand::Rng;
 use crate::city::Building;
 use crate::config::{DrivingConfig, GameConfig};
 use crate::resources::{GameAssets, GameState, KeysPressed, CITY_HALF, GRID, STEP};
+use crate::util::{damp, lerp, lerp_angle};
 
 #[derive(Component)]
 pub struct Car {
@@ -19,13 +20,67 @@ pub struct Car {
     /// Set once a human has driven the car: from then on the AI never
     /// steers it again and an abandoned car coasts to a stop and stays put.
     pub parked: bool,
+    /// Seconds left before the AI may turn again. Stops a car from making a
+    /// second turn inside the same intersection.
+    pub turn_cooldown: f32,
     pub color_idx: usize,
 }
 
-#[derive(Component, Clone, Copy, PartialEq)]
+#[derive(Component, Clone, Copy, PartialEq, Debug)]
 pub enum Axis {
     X,
     Z,
+}
+
+/// Distance of a lane's centre line from the road's centre line, m.
+const LANE_OFFSET: f32 = 2.0;
+/// Chance that an AI car turns at an intersection it drives through.
+const TURN_CHANCE: f64 = 0.35;
+/// After a turn the AI won't turn again for this long, s (≈ one intersection).
+const TURN_COOLDOWN_SECS: f32 = 1.0;
+/// How fast a car settles into its lane after a turn, 1/s.
+const LANE_SETTLE_RATE: f32 = 8.0;
+/// How fast a car swings its nose to the new heading after a turn, 1/s.
+const HEADING_RATE: f32 = 10.0;
+
+/// Lateral offset (m) from the road centre of the lane used when driving in
+/// direction `dir` (±1) along `axis`. Right-hand traffic: opposing cars get
+/// opposite offsets, so they pass each other instead of overlapping.
+pub fn lane_offset(axis: Axis, dir: f32) -> f32 {
+    match axis {
+        Axis::X => dir * LANE_OFFSET,
+        Axis::Z => -dir * LANE_OFFSET,
+    }
+}
+
+/// Yaw that makes a car face direction `dir` (±1) along `axis`.
+pub fn heading_yaw(axis: Axis, dir: f32) -> f32 {
+    match axis {
+        Axis::X => dir * std::f32::consts::FRAC_PI_2,
+        Axis::Z => {
+            if dir > 0.0 {
+                0.0
+            } else {
+                std::f32::consts::PI
+            }
+        }
+    }
+}
+
+/// Coordinate of the road centre line closest to `v`.
+fn nearest_road_center(v: f32) -> f32 {
+    let i = ((v + CITY_HALF) / STEP).round().clamp(0.0, GRID as f32);
+    -CITY_HALF + i * STEP
+}
+
+/// Did moving from `old` to `new` along a road pass over a crossing road's
+/// centre line (i.e. through an intersection)?
+fn crossed_road_center(old: f32, new: f32) -> bool {
+    old != new
+        && (0..=GRID).any(|i| {
+            let c = -CITY_HALF + i as f32 * STEP;
+            (old - c) * (new - c) <= 0.0
+        })
 }
 
 #[derive(Component)]
@@ -45,19 +100,17 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
     for _ in 0..count {
         let color_idx = rng.gen_range(0..assets.mat_car_colors.len());
         let axis = if rng.gen_bool(0.5) { Axis::X } else { Axis::Z };
-        let lane = rng.gen_range(0..=GRID);
-        let coord = -CITY_HALF + lane as f32 * STEP;
+        let road = rng.gen_range(0..=GRID);
+        let coord = -CITY_HALF + road as f32 * STEP;
         let along = -CITY_HALF + rng.gen::<f32>() * (CITY_HALF * 2.0);
-        let lane_offset = (if rng.gen_bool(0.5) { -1.0 } else { 1.0 }) * 2.0;
         let dir = if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
+        let lane = coord + lane_offset(axis, dir);
 
-        let (pos, rot_y) = match axis {
-            Axis::X => (
-                Vec3::new(along, 0.0, coord + lane_offset),
-                std::f32::consts::PI / 2.0,
-            ),
-            Axis::Z => (Vec3::new(coord + lane_offset, 0.0, along), 0.0),
+        let pos = match axis {
+            Axis::X => Vec3::new(along, 0.0, lane),
+            Axis::Z => Vec3::new(lane, 0.0, along),
         };
+        let rot_y = heading_yaw(axis, dir);
 
         // Wheels
         let wheel_pos = [
@@ -137,6 +190,7 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
                     speed: 6.0 + rng.gen::<f32>() * 6.0,
                     velocity: 0.0,
                     parked: false,
+                    turn_cooldown: 0.0,
                     color_idx,
                 },
                 CarWheels {
@@ -259,35 +313,64 @@ pub fn update_ai_cars(
             }
         }
 
-        let delta = car.dir * car.speed * speed_scale * dt;
-        match car.axis {
+        car.turn_cooldown = (car.turn_cooldown - dt).max(0.0);
+
+        // Drive along the road.
+        let step = car.dir * car.speed * speed_scale * dt;
+        let (old_along, new_along) = match car.axis {
             Axis::X => {
-                transform.translation.x += delta;
-                transform.rotation = Quat::from_rotation_y(if car.dir > 0.0 {
-                    std::f32::consts::PI / 2.0
-                } else {
-                    -std::f32::consts::PI / 2.0
-                });
-                if transform.translation.x > CITY_HALF + 5.0 {
-                    transform.translation.x = -CITY_HALF - 5.0;
-                }
-                if transform.translation.x < -CITY_HALF - 5.0 {
-                    transform.translation.x = CITY_HALF + 5.0;
-                }
+                let old = transform.translation.x;
+                transform.translation.x += step;
+                (old, transform.translation.x)
             }
             Axis::Z => {
-                transform.translation.z += delta;
-                transform.rotation = Quat::from_rotation_y(if car.dir > 0.0 {
-                    0.0
-                } else {
-                    std::f32::consts::PI
-                });
-                if transform.translation.z > CITY_HALF + 5.0 {
-                    transform.translation.z = -CITY_HALF - 5.0;
-                }
-                if transform.translation.z < -CITY_HALF - 5.0 {
-                    transform.translation.z = CITY_HALF + 5.0;
-                }
+                let old = transform.translation.z;
+                transform.translation.z += step;
+                (old, transform.translation.z)
+            }
+        };
+
+        // Maybe turn: decided once per intersection driven through (not once
+        // per frame), so the behaviour doesn't depend on the frame rate.
+        if car.turn_cooldown == 0.0
+            && crossed_road_center(old_along, new_along)
+            && rng.gen_bool(TURN_CHANCE)
+        {
+            car.axis = match car.axis {
+                Axis::X => Axis::Z,
+                Axis::Z => Axis::X,
+            };
+            car.dir = if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
+            car.turn_cooldown = TURN_COOLDOWN_SECS;
+        }
+
+        // Keep to the right-hand lane of the current road: after a turn this
+        // eases the car sideways into its new lane instead of snapping it to
+        // the road centre (where it would overlap oncoming traffic).
+        let cross = match car.axis {
+            Axis::X => &mut transform.translation.z,
+            Axis::Z => &mut transform.translation.x,
+        };
+        let lane_target = nearest_road_center(*cross) + lane_offset(car.axis, car.dir);
+        *cross = lerp(*cross, lane_target, damp(LANE_SETTLE_RATE, dt));
+
+        // Swing the nose to the heading of the current road.
+        let yaw_now = transform.rotation.to_euler(EulerRot::YXZ).0;
+        let yaw = lerp_angle(
+            yaw_now,
+            heading_yaw(car.axis, car.dir),
+            damp(HEADING_RATE, dt),
+        );
+        transform.rotation = Quat::from_rotation_y(yaw);
+
+        // Leaving the map on one side re-enters on the opposite one.
+        let wrap = CITY_HALF + 5.0;
+        let pos = &mut transform.translation;
+        for v in [&mut pos.x, &mut pos.z] {
+            if *v > wrap {
+                *v = -wrap;
+            } else if *v < -wrap {
+                *v = wrap;
             }
         }
 
@@ -296,31 +379,6 @@ pub fn update_ai_cars(
             &mut wheel_transforms,
             car.speed * speed_scale * dt,
         );
-
-        // Random turn at intersection
-        if rng.gen_bool(0.006) {
-            for i in 0..=GRID {
-                let c1 = -CITY_HALF + i as f32 * STEP;
-                match car.axis {
-                    Axis::X => {
-                        if (transform.translation.x - c1).abs() < 1.5 && rng.gen_bool(0.5) {
-                            car.axis = Axis::Z;
-                            transform.translation.x = c1;
-                            car.dir = if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
-                            break;
-                        }
-                    }
-                    Axis::Z => {
-                        if (transform.translation.z - c1).abs() < 1.5 && rng.gen_bool(0.5) {
-                            car.axis = Axis::X;
-                            transform.translation.z = c1;
-                            car.dir = if rng.gen_bool(0.5) { 1.0 } else { -1.0 };
-                            break;
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -423,6 +481,138 @@ mod tests {
     fn holding_brake_ends_in_reverse_capped_at_reverse_speed() {
         let cfg = DrivingConfig::default();
         assert_eq!(run(cfg.max_speed, -1.0, 10.0), -cfg.reverse_speed);
+    }
+
+    #[test]
+    fn opposing_traffic_uses_different_lanes() {
+        for axis in [Axis::X, Axis::Z] {
+            assert_eq!(lane_offset(axis, 1.0), -lane_offset(axis, -1.0));
+            assert_ne!(lane_offset(axis, 1.0), 0.0);
+        }
+    }
+
+    #[test]
+    fn lanes_keep_right() {
+        // Right of a car heading `fwd` (Y up, right-handed) is `fwd × Y`.
+        for (axis, dir, fwd) in [
+            (Axis::X, 1.0, Vec3::X),
+            (Axis::X, -1.0, -Vec3::X),
+            (Axis::Z, 1.0, Vec3::Z),
+            (Axis::Z, -1.0, -Vec3::Z),
+        ] {
+            let right = fwd.cross(Vec3::Y);
+            let off = match axis {
+                Axis::X => Vec3::Z,
+                Axis::Z => Vec3::X,
+            } * lane_offset(axis, dir);
+            assert!(off.dot(right) > 0.0, "{axis:?} {dir}");
+        }
+    }
+
+    #[test]
+    fn heading_yaw_points_along_travel_direction() {
+        for (axis, dir, want) in [
+            (Axis::X, 1.0, Vec3::X),
+            (Axis::X, -1.0, -Vec3::X),
+            (Axis::Z, 1.0, Vec3::Z),
+            (Axis::Z, -1.0, -Vec3::Z),
+        ] {
+            let fwd = Quat::from_rotation_y(heading_yaw(axis, dir)) * Vec3::Z;
+            assert!((fwd - want).length() < 1e-5, "{axis:?} {dir}: {fwd}");
+        }
+    }
+
+    #[test]
+    fn intersection_crossing_is_detected_once() {
+        let c = -CITY_HALF + STEP; // a road centre line
+        assert!(crossed_road_center(c - 0.1, c + 0.1));
+        assert!(!crossed_road_center(c + 0.1, c + 0.3));
+        assert!(!crossed_road_center(c, c));
+    }
+
+    #[test]
+    fn nearest_road_center_ignores_lane_offset() {
+        let c = -CITY_HALF + 2.0 * STEP;
+        assert_eq!(nearest_road_center(c + LANE_OFFSET), c);
+        assert_eq!(nearest_road_center(c - LANE_OFFSET), c);
+    }
+
+    /// Runs the real `update_ai_cars` system headlessly for a minute of game
+    /// time (which also proves its queries don't conflict at runtime).
+    #[test]
+    fn ai_traffic_keeps_to_its_lane_and_actually_turns() {
+        use bevy::time::TimeUpdateStrategy;
+        use std::time::Duration;
+
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(
+                DT,
+            )))
+            .insert_resource(GameConfig::default())
+            .insert_resource(GameState::default())
+            .insert_resource(KeysPressed::default())
+            .add_systems(Update, update_ai_cars);
+
+        let mut cars = Vec::new();
+        for k in 0..14usize {
+            let axis = if k % 2 == 0 { Axis::X } else { Axis::Z };
+            let dir = if k % 4 < 2 { 1.0 } else { -1.0 };
+            let road = -CITY_HALF + (k % (GRID + 1)) as f32 * STEP;
+            let lane = road + lane_offset(axis, dir);
+            let pos = match axis {
+                Axis::X => Vec3::new(-60.0 + k as f32 * 7.0, 0.0, lane),
+                Axis::Z => Vec3::new(lane, 0.0, -60.0 + k as f32 * 7.0),
+            };
+            let w: [Entity; 4] =
+                std::array::from_fn(|_| app.world_mut().spawn(Transform::default()).id());
+            let e = app
+                .world_mut()
+                .spawn((
+                    Transform::from_translation(pos)
+                        .with_rotation(Quat::from_rotation_y(heading_yaw(axis, dir))),
+                    Car {
+                        axis,
+                        dir,
+                        speed: 6.0 + k as f32 * 0.5,
+                        velocity: 0.0,
+                        parked: false,
+                        turn_cooldown: 0.0,
+                        color_idx: 0,
+                    },
+                    CarWheels {
+                        fl: w[0],
+                        fr: w[1],
+                        rl: w[2],
+                        rr: w[3],
+                        angle: 0.0,
+                    },
+                ))
+                .id();
+            cars.push((e, axis));
+        }
+
+        for _ in 0..(60.0 / DT) as usize {
+            app.update();
+        }
+
+        let mut turned = 0;
+        for (e, start_axis) in cars {
+            let car = app.world().get::<Car>(e).unwrap();
+            let pos = app.world().get::<Transform>(e).unwrap().translation;
+            if car.axis != start_axis {
+                turned += 1;
+            }
+            if car.turn_cooldown == 0.0 {
+                let cross = if car.axis == Axis::X { pos.z } else { pos.x };
+                let want = nearest_road_center(cross) + lane_offset(car.axis, car.dir);
+                assert!(
+                    (cross - want).abs() < 0.3,
+                    "car left its lane: cross={cross} want={want}"
+                );
+            }
+        }
+        assert!(turned > 0, "no car turned in a whole minute");
     }
 
     #[test]
