@@ -157,6 +157,8 @@ pub struct PlayerConfig {
     pub punch_range: f32,
     /// Cash for each ped hit.
     pub cash_per_punch: i32,
+    /// HP regained per second while no cop has hold of you.
+    pub hp_regen_per_sec: f32,
 }
 
 impl Default for PlayerConfig {
@@ -167,6 +169,7 @@ impl Default for PlayerConfig {
             jump_velocity: 7.5,
             punch_range: 1.4,
             cash_per_punch: 5,
+            hp_regen_per_sec: 3.0,
         }
     }
 }

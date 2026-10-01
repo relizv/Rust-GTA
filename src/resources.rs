@@ -11,6 +11,9 @@ pub const SIDEWALK_W: f32 = 2.0;
 pub const CITY_HALF: f32 = (BLOCK + ROAD_W) * GRID as f32 / 2.0;
 pub const STEP: f32 = BLOCK + ROAD_W;
 
+/// Player's full health.
+pub const MAX_HP: f32 = 100.0;
+
 // ----- Global game state -----
 #[derive(Resource)]
 pub struct GameState {
@@ -27,7 +30,7 @@ pub struct GameState {
 impl Default for GameState {
     fn default() -> Self {
         Self {
-            hp: 100.0,
+            hp: MAX_HP,
             cash: 0,
             wanted: 0,
             wanted_decay_timer: 0.0,

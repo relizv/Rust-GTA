@@ -14,7 +14,7 @@ use crate::car::collides_buildings_at;
 use crate::city::Building;
 use crate::config::GameConfig;
 use crate::player::Player;
-use crate::resources::{GameAssets, GameState, CITY_HALF, GRID, ROAD_W, STEP};
+use crate::resources::{GameAssets, GameState, CITY_HALF, GRID, MAX_HP, ROAD_W, STEP};
 use crate::util::lerp_angle;
 
 #[derive(Component)]
@@ -233,6 +233,7 @@ pub fn update_police(
     let player_pos = player_tf.translation;
 
     let mut busted = false;
+    let mut in_contact = false;
 
     for (mut tf, mut lights) in police.iter_mut() {
         // --- Chase steering: turn toward the player, drive forward ---
@@ -274,6 +275,7 @@ pub fn update_police(
 
         // --- Contact: cop grabs you, HP drains ---
         if dist < config.police.contact_radius {
+            in_contact = true;
             game_state.hp -= config.police.contact_damage_per_sec * dt;
             if game_state.hp <= 0.0 {
                 busted = true;
@@ -305,10 +307,16 @@ pub fn update_police(
         }
     }
 
+    // Health comes back once nobody has hold of you (it used to stay low
+    // until you got busted, however long ago the cops let go).
+    if !in_contact && !busted && game_state.hp < MAX_HP {
+        game_state.hp = (game_state.hp + config.player.hp_regen_per_sec * dt).min(MAX_HP);
+    }
+
     if busted {
         let fine = (game_state.cash as f32 * config.police.busted_fine_frac) as i32;
         game_state.cash -= fine;
-        game_state.hp = 100.0;
+        game_state.hp = MAX_HP;
         game_state.wanted = 0;
         game_state.wanted_decay_timer = 0.0;
         game_state.in_vehicle = None;
