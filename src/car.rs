@@ -16,6 +16,9 @@ pub struct Car {
     /// Signed forward speed while a human drives the car, m/s
     /// (negative = reversing). Independent of the wheel visuals.
     pub velocity: f32,
+    /// Set once a human has driven the car: from then on the AI never
+    /// steers it again and an abandoned car coasts to a stop and stays put.
+    pub parked: bool,
     pub color_idx: usize,
 }
 
@@ -133,6 +136,7 @@ pub fn spawn_cars(mut commands: Commands, assets: Res<GameAssets>) {
                     dir,
                     speed: 6.0 + rng.gen::<f32>() * 6.0,
                     velocity: 0.0,
+                    parked: false,
                     color_idx,
                 },
                 CarWheels {
@@ -185,6 +189,12 @@ pub fn update_ai_cars(
 
         if driven {
             // ----- Player driving -----
+            if !car.parked {
+                // Carjacking: keep the speed the AI driver was cruising at
+                // and take the car off the AI's hands for good.
+                car.velocity = car.speed;
+                car.parked = true;
+            }
             let throttle = f32::from(keys.w) - f32::from(keys.s);
             car.velocity = step_drive_speed(car.velocity, throttle, dt, &config.driving);
 
@@ -220,6 +230,22 @@ pub fn update_ai_cars(
             game_state.last_speed_kmh = (car.velocity.abs() * 3.6).round();
 
             roll_wheels(&mut wheels, &mut wheel_transforms, car.velocity * dt);
+            continue;
+        }
+
+        // ----- Abandoned car: coast to a stop and stay where it is -----
+        if car.parked {
+            car.velocity = step_drive_speed(car.velocity, 0.0, dt, &config.driving);
+            if car.velocity != 0.0 {
+                let fwd = transform.rotation * Vec3::Z;
+                let next = transform.translation + fwd * car.velocity * dt;
+                if collides_buildings_at(next.x, next.z, 1.5, &buildings) {
+                    car.velocity = 0.0;
+                } else {
+                    transform.translation = next;
+                    roll_wheels(&mut wheels, &mut wheel_transforms, car.velocity * dt);
+                }
+            }
             continue;
         }
 
