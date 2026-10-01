@@ -37,13 +37,21 @@ pub struct PoliceLights {
 }
 
 /// Keeps the number of live cop cars in sync with the wanted level.
+///
+/// * Cops are added one at a time, `spawn_interval_secs` apart.
+/// * Surplus cops (wanted level dropped) are never deleted in plain sight:
+///   `update_police` makes them drive away and they are removed only once
+///   they are `despawn_distance` away from the player.
+#[allow(clippy::too_many_arguments)]
 pub fn manage_police(
     mut commands: Commands,
+    time: Res<Time>,
     assets: Res<GameAssets>,
     config: Res<GameConfig>,
     game_state: Res<GameState>,
-    police: Query<Entity, With<PoliceCar>>,
+    police: Query<(Entity, &GlobalTransform), With<PoliceCar>>,
     player_q: Query<&GlobalTransform, With<Player>>,
+    mut spawn_cooldown: Local<f32>,
 ) {
     let target = if game_state.wanted == 0 {
         0
@@ -51,23 +59,35 @@ pub fn manage_police(
         (game_state.wanted as usize * config.police.cars_per_star).min(config.police.max_cars)
     };
     let current = police.iter().count();
+    let player_pos = player_q
+        .get_single()
+        .map(|gt| gt.translation())
+        .unwrap_or(Vec3::ZERO);
+
+    if *spawn_cooldown > 0.0 {
+        *spawn_cooldown -= time.delta_secs();
+    }
 
     if current > target {
-        for e in police.iter().take(current - target) {
+        let surplus = current - target;
+        let far_away: Vec<Entity> = police
+            .iter()
+            .filter(|(_, gt)| {
+                gt.translation().distance(player_pos) > config.police.despawn_distance
+            })
+            .map(|(e, _)| e)
+            .take(surplus)
+            .collect();
+        for e in far_away {
             commands.entity(e).despawn_recursive();
         }
         return;
     }
 
-    if current < target {
-        let player_pos = player_q
-            .get_single()
-            .map(|gt| gt.translation())
-            .unwrap_or(Vec3::ZERO);
+    if current < target && *spawn_cooldown <= 0.0 {
         let mut rng = rand::thread_rng();
-        for _ in 0..(target - current) {
-            spawn_police_car(&mut commands, &assets, &config, player_pos, &mut rng);
-        }
+        spawn_police_car(&mut commands, &assets, &config, player_pos, &mut rng);
+        *spawn_cooldown = config.police.spawn_interval_secs;
     }
 }
 
@@ -232,6 +252,9 @@ pub fn update_police(
     };
     let player_pos = player_tf.translation;
 
+    // No stars: cops give up the chase, drive away and are cleaned up by
+    // `manage_police` once they are far enough from the player.
+    let hunting = game_state.wanted > 0;
     let mut busted = false;
     let mut in_contact = false;
 
@@ -240,7 +263,11 @@ pub fn update_police(
         let mut to = player_pos - tf.translation;
         to.y = 0.0;
         let dist = to.length();
-        let target_yaw = to.x.atan2(to.z);
+        let target_yaw = if hunting {
+            to.x.atan2(to.z)
+        } else {
+            (-to.x).atan2(-to.z)
+        };
         let current_yaw = tf.rotation.to_euler(EulerRot::YXZ).0;
         let yaw = lerp_angle(
             current_yaw,
@@ -250,7 +277,9 @@ pub fn update_police(
         tf.rotation = Quat::from_rotation_y(yaw);
 
         // Slow down when close so they don't orbit the player at full speed.
-        let speed = if dist > 5.0 {
+        let speed = if !hunting {
+            config.police.chase_speed * 0.5
+        } else if dist > 5.0 {
             config.police.chase_speed
         } else {
             config.police.chase_speed * 0.4
@@ -274,7 +303,7 @@ pub fn update_police(
         tf.translation.z = tf.translation.z.clamp(-lim, lim);
 
         // --- Contact: cop grabs you, HP drains ---
-        if dist < config.police.contact_radius {
+        if hunting && dist < config.police.contact_radius {
             in_contact = true;
             game_state.hp -= config.police.contact_damage_per_sec * dt;
             if game_state.hp <= 0.0 {

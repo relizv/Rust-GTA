@@ -218,6 +218,13 @@ pub struct PoliceConfig {
     pub steer_rate: f32,
     /// How far from the player new cops spawn, m.
     pub spawn_distance: f32,
+    /// Seconds between spawns of consecutive cop cars (a 3-star chase builds
+    /// up over a few seconds, and a destroyed cop isn't replaced instantly).
+    pub spawn_interval_secs: f32,
+    /// Once the wanted level is gone, cops drive away and are removed only
+    /// when they are at least this far from the player, m (so they never
+    /// vanish in front of you).
+    pub despawn_distance: f32,
     /// Distance at which a cop "grabs" you and drains HP, m.
     pub contact_radius: f32,
     /// HP drained per second while a cop is on you.
@@ -242,6 +249,8 @@ impl Default for PoliceConfig {
             chase_speed: 19.0,
             steer_rate: 2.2,
             spawn_distance: 50.0,
+            spawn_interval_secs: 3.0,
+            despawn_distance: 90.0,
             contact_radius: 2.4,
             contact_damage_per_sec: 30.0,
             busted_fine_frac: 0.5,
