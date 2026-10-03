@@ -11,6 +11,9 @@ pub const SIDEWALK_W: f32 = 2.0;
 pub const CITY_HALF: f32 = (BLOCK + ROAD_W) * GRID as f32 / 2.0;
 pub const STEP: f32 = BLOCK + ROAD_W;
 
+/// Player's full health.
+pub const MAX_HP: f32 = 100.0;
+
 // ----- Global game state -----
 #[derive(Resource)]
 pub struct GameState {
@@ -27,7 +30,7 @@ pub struct GameState {
 impl Default for GameState {
     fn default() -> Self {
         Self {
-            hp: 100.0,
+            hp: MAX_HP,
             cash: 0,
             wanted: 0,
             wanted_decay_timer: 0.0,
@@ -42,6 +45,13 @@ impl Default for GameState {
 impl GameState {
     pub fn show_toast(&mut self, msg: impl Into<String>) {
         self.toast = Some((msg.into(), 1.8));
+    }
+
+    /// Make sure the wanted level is at least `n` (never lowers it, never
+    /// stacks) and restart the decay timer.
+    pub fn raise_wanted_to(&mut self, n: u32) {
+        self.wanted = self.wanted.max(n).min(5);
+        self.wanted_decay_timer = 0.0;
     }
 
     pub fn add_wanted(&mut self, n: u32) {
@@ -334,4 +344,22 @@ pub fn setup_game_assets(
         mat_tracer,
         mat_explosion,
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn raise_wanted_to_never_stacks_or_lowers() {
+        let mut g = GameState::default();
+        g.raise_wanted_to(1);
+        g.raise_wanted_to(1);
+        assert_eq!(g.wanted, 1);
+        g.wanted = 3;
+        g.wanted_decay_timer = 9.0;
+        g.raise_wanted_to(1);
+        assert_eq!(g.wanted, 3);
+        assert_eq!(g.wanted_decay_timer, 0.0);
+    }
 }

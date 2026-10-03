@@ -157,6 +157,11 @@ pub struct PlayerConfig {
     pub punch_range: f32,
     /// Cash for each ped hit.
     pub cash_per_punch: i32,
+    /// Beating up pedestrians draws the cops: wanted level is raised to at
+    /// least this many stars (0 = punching is consequence-free).
+    pub punch_wanted: u32,
+    /// HP regained per second while no cop has hold of you.
+    pub hp_regen_per_sec: f32,
 }
 
 impl Default for PlayerConfig {
@@ -167,6 +172,8 @@ impl Default for PlayerConfig {
             jump_velocity: 7.5,
             punch_range: 1.4,
             cash_per_punch: 5,
+            punch_wanted: 1,
+            hp_regen_per_sec: 3.0,
         }
     }
 }
@@ -175,8 +182,16 @@ impl Default for PlayerConfig {
 pub struct DrivingConfig {
     /// Max speed of a player-driven car, m/s.
     pub max_speed: f32,
-    /// Acceleration / brake rate, m/s².
+    /// Acceleration rate, m/s².
     pub accel: f32,
+    /// Braking rate (pedal pushed against the direction of travel), m/s².
+    /// Stronger than `accel`, so the car actually stops.
+    pub brake: f32,
+    /// Engine braking / air drag when no pedal is pressed, 1/s. The car
+    /// coasts to a halt instead of holding (or gaining) speed.
+    pub drag: f32,
+    /// Max reverse speed, m/s.
+    pub reverse_speed: f32,
     /// Steering rate, rad/s at full speed factor.
     pub steer_rate: f32,
 }
@@ -186,6 +201,9 @@ impl Default for DrivingConfig {
         Self {
             max_speed: 28.0,
             accel: 18.0,
+            brake: 34.0,
+            drag: 1.4,
+            reverse_speed: 10.0,
             steer_rate: 1.6,
         }
     }
@@ -204,6 +222,13 @@ pub struct PoliceConfig {
     pub steer_rate: f32,
     /// How far from the player new cops spawn, m.
     pub spawn_distance: f32,
+    /// Seconds between spawns of consecutive cop cars (a 3-star chase builds
+    /// up over a few seconds, and a destroyed cop isn't replaced instantly).
+    pub spawn_interval_secs: f32,
+    /// Once the wanted level is gone, cops drive away and are removed only
+    /// when they are at least this far from the player, m (so they never
+    /// vanish in front of you).
+    pub despawn_distance: f32,
     /// Distance at which a cop "grabs" you and drains HP, m.
     pub contact_radius: f32,
     /// HP drained per second while a cop is on you.
@@ -228,6 +253,8 @@ impl Default for PoliceConfig {
             chase_speed: 19.0,
             steer_rate: 2.2,
             spawn_distance: 50.0,
+            spawn_interval_secs: 3.0,
+            despawn_distance: 90.0,
             contact_radius: 2.4,
             contact_damage_per_sec: 30.0,
             busted_fine_frac: 0.5,

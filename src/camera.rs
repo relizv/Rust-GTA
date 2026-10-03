@@ -10,19 +10,14 @@
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use bevy::transform::components::GlobalTransform;
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::PI;
 
 use crate::car::Car;
 use crate::config::GameConfig;
 use crate::player::Player;
 use crate::resources::{GameState, InputState};
+use crate::util::angle_diff;
 use crate::weapons::WeaponState;
-
-/// Shortest signed angle from `from` to `to`, in (-PI, PI]. Keeps the in-car
-/// recenter from taking the long way around when yaw wraps past ±π.
-fn angle_diff(from: f32, to: f32) -> f32 {
-    (to - from + PI).rem_euclid(TAU) - PI
-}
 
 #[allow(clippy::too_many_arguments)]
 pub fn update_camera(

@@ -2,9 +2,9 @@
 name = "mini-gta"
 version = "0.1.0"
 edition = "2021"
-authors = ["Mini GTA"]
+authors = ["relizv"]
 description = "A browser-style mini-GTA, ported from Three.js to Bevy"
-license = "MIT"
+license = "Apache-2.0"
 
 [dependencies]
 bevy = "0.15"
